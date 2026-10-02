@@ -2,7 +2,15 @@ require("dotenv").config();
 const OpenAI = require("openai");
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
 
+// Tiny dummy web server so Render detects an open port
+http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Zewdneh bot is alive\n");
+}).listen(process.env.PORT || 3000, () => {
+  console.log("🌐 Dummy web server listening on port", process.env.PORT || 3000);
+});
 const openai = new OpenAI({
   apiKey: process.env.GEMINI_API_KEY,
   baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
