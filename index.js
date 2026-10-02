@@ -175,6 +175,12 @@ async function main() {
         // ============ 1) Friend message (business) ============
         if (update.business_message && update.business_message.text) {
           const message = update.business_message;
+
+          // Ignore messages that YOU (the owner) sent to the friend
+          if (String(message.from?.id) === String(OWNER_CHAT_ID)) {
+            console.log(`↩️ Skipping owner's own outgoing message: ${message.text}`);
+            continue;
+          }
           const businessConnectionId = message.business_connection_id;
           const chatId = message.chat.id;
           const incomingText = message.text;
