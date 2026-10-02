@@ -467,7 +467,7 @@ async function handleUpdate(update) {
         await sendTelegramMessage(businessConnectionId, customerChatId, ask);
         state.awaiting = "name_phone";
         saveState();
-        console.log(`🛡 Rejected file from ${customerName} — waiting for identity`);
+        //   console.log(`🛡 Rejected file from ${customerName} — waiting for identity`);
         return;
       }
 
@@ -480,10 +480,10 @@ async function handleUpdate(update) {
         if (/amharic|አማርኛ/i.test(incomingText)) { state.lang = "am"; saveState(); }
         if (/orom/i.test(incomingText)) { state.lang = "om"; saveState(); }
 
-        console.log(`📩 Customer (${customerName}) [${state.lang}]: ${incomingText}`);
+        //   console.log(`📩 Customer (${customerName}) [${state.lang}]: ${incomingText}`);
 
         const ai = await askAI(customerChatId, incomingText, state.lang);
-        console.log(`🧠 Intent: ${ai.intent}`);
+        //   console.log(`🧠 Intent: ${ai.intent}`);
 
         // DOCUMENT REQUEST
         if (ai.intent === "DOCUMENT_REQUEST" && ai.document_type) {
@@ -503,25 +503,54 @@ async function handleUpdate(update) {
             });
             state.blocked = true;
             saveState();
-            console.log(`📨 Contract escalated to owner`);
+            //   console.log(`📨 Contract escalated to owner`);
             return;
           }
 
           // Public → send automatically
+                  // Public file — send only if the customer is established (≥ 20 messages)
+          const historyLen = (memory[String(customerChatId)] || []).length;
+          const isEstablished = historyLen >= 20;
+
           if (!fs.existsSync(filePath)) {
             await sendTelegramMessage(
               businessConnectionId, customerChatId,
-              responses.will_respond_soon[`reply_${state.lang || "am"}`]
+              responses.will_respond_soon[`reply_${state.lang || "am"}`] || responses.will_respond_soon.reply_am
             );
             return;
           }
+
+          if (!isEstablished) {
+            // First-time / short chat → do NOT auto-send. Reply politely + escalate to owner.
+            if (ai.reply) {
+              await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
+            }
+            await sendTelegramMessage(
+              businessConnectionId, customerChatId,
+              responses.will_respond_soon[`reply_${state.lang || "am"}`] || responses.will_respond_soon.reply_am
+            );
+
+            const ownerMsg = await sendToOwner(
+              `📄 FILE REQUEST (new customer)\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\nRequested: ${entry.name}\nHistory: ${historyLen} msgs\n\n✍️ Reply to THIS message to send the file (or a message) to the customer.`
+            );
+            pendingQuestions.set(ownerMsg.result.message_id, {
+              businessConnectionId,
+              customerChatId,
+              customerName,
+            });
+            state.blocked = true;
+            saveState();
+         //   console.log(`📨 New-customer file request escalated to owner`);
+            return;
+          }
+
+          // Established customer → send file directly
           if (ai.reply) {
             await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
           }
           await sendTelegramDocument(businessConnectionId, customerChatId, filePath, entry.caption || entry.name);
-          console.log(`📄 Sent public document: ${entry.file}`);
+         //   console.log(`📄 Sent public document: ${entry.file}`);
           return;
-        }
 
         // HUMAN ESCALATION
         if (ai.intent === "HUMAN_ESCALATION") {
