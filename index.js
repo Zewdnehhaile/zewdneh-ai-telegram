@@ -23,7 +23,6 @@ const KNOWLEDGE_DIR = path.join(__dirname, "knowledge");
 const MEMORY_FILE = path.join(__dirname, "memory.json");
 const MAX_HISTORY = 20;
 
-// Phone validation: 09XXXXXXXX  OR  +2519XXXXXXXX
 const PHONE_REGEX = /^(09\d{8}|\+2519\d{8})$/;
 
 // ======================================================
@@ -51,16 +50,8 @@ console.log("   - responses:", Object.keys(responses).length);
 console.log("   - examples:", examples.examples.length);
 
 // ======================================================
-// CUSTOMER STATE (per chat)
+// CUSTOMER STATE
 // ======================================================
-// state[chatId] = {
-//   lang: "am" | "en" | "om" | null,
-//   awaiting: null | "language" | "name_phone" | "resend_file",
-//   tempName: string | null,
-//   tempPhone: string | null,
-//   blocked: boolean  // true if a request is pending owner reply
-// }
-
 let customerState = {};
 
 function saveState() {
@@ -87,7 +78,7 @@ function getState(chatId) {
   if (!customerState[key]) {
     customerState[key] = {
       lang: null,
-      awaiting: "language", // first time → must choose language
+      awaiting: "language",
       tempName: null,
       tempPhone: null,
       blocked: false,
@@ -98,7 +89,7 @@ function getState(chatId) {
 }
 
 // ======================================================
-// MEMORY (conversation history)
+// MEMORY
 // ======================================================
 let memory = {};
 if (fs.existsSync(MEMORY_FILE)) {
@@ -320,7 +311,7 @@ async function askAI(chatId, customerMessage, lang) {
 }
 
 // ======================================================
-// PENDING ESCALATIONS (owner replies mapped to customer)
+// PENDING ESCALATIONS
 // ======================================================
 const pendingQuestions = new Map();
 
@@ -340,13 +331,13 @@ async function handleUpdate(update) {
       const customerName = message.from?.first_name || message.from?.username || "Customer";
       const state = getState(customerChatId);
 
-      // ---------- BLOCK: if a request is pending owner reply ----------
+      // ---------- BLOCK ----------
       if (state.blocked) {
         console.log(`🚫 Blocked: ${customerName} has a pending request`);
         return;
       }
 
-      // ---------- LANGUAGE MENU (first time) ----------
+      // ---------- LANGUAGE MENU ----------
       if (state.awaiting === "language") {
         const text = (message.text || "").trim();
         if (text === "1" || /amharic|አማርኛ/i.test(text)) {
@@ -370,21 +361,15 @@ async function handleUpdate(update) {
           await sendTelegramMessage(businessConnectionId, customerChatId, "Baga nagaan dhuftan. Akkamittin isin gargaaruu danda'a?");
           return;
         }
-        // didn't pick → show menu again
         await sendTelegramMessage(businessConnectionId, customerChatId, responses.language_menu.reply);
         return;
       }
 
-      // ---------- AWAITING NAME + PHONE ----------
+      // ---------- NAME + PHONE ----------
       if (state.awaiting === "name_phone") {
         const text = (message.text || "").trim();
-        const parts = text.split(/\s+/);
-
-        // Look for phone
         const phoneMatch = text.match(/(09\d{8}|\+2519\d{8})/);
         const phone = phoneMatch ? phoneMatch[0] : null;
-
-        // Name = everything except the phone, must have at least 2 chars
         const namePart = text.replace(phone || "", "").trim();
 
         if (!phone || !PHONE_REGEX.test(phone)) {
@@ -403,7 +388,6 @@ async function handleUpdate(update) {
           return;
         }
 
-        // Save
         state.tempName = namePart;
         state.tempPhone = phone;
         state.awaiting = "resend_file";
@@ -416,10 +400,9 @@ async function handleUpdate(update) {
         return;
       }
 
-      // ---------- AWAITING RESEND OF FILE ----------
+      // ---------- RESEND FILE ----------
       if (state.awaiting === "resend_file") {
         if (message.document || (message.photo && message.photo.length > 0)) {
-          // Good — forward to owner
           const fileInfo = message.document
             ? `📎 Document: ${message.document.file_name || "file"}`
             : `🖼 Photo`;
@@ -428,7 +411,6 @@ async function handleUpdate(update) {
             `📥 VERIFIED CUSTOMER FILE\n\nName: ${state.tempName}\nPhone: ${state.tempPhone}\nChat ID: ${customerChatId}\n${fileInfo}\n\n✍️ Reply to THIS message with what to send to the customer.`
           );
 
-          // Forward the file to owner
           if (message.document) {
             await sendTelegramDocumentByFileId(null, OWNER_CHAT_ID, message.document.file_id, `From ${state.tempName}`);
           } else {
@@ -460,14 +442,12 @@ async function handleUpdate(update) {
         return;
       }
 
-      // ---------- FIRST FILE, needs identity ----------
+      // ---------- FIRST FILE → ASK IDENTITY ----------
       if (message.document || (message.photo && message.photo.length > 0)) {
-        // Reject and ask for info
         const ask = responses.ask_name_phone[`reply_${state.lang || "am"}`] || responses.ask_name_phone.reply_am;
         await sendTelegramMessage(businessConnectionId, customerChatId, ask);
         state.awaiting = "name_phone";
         saveState();
-        //   console.log(`🛡 Rejected file from ${customerName} — waiting for identity`);
         return;
       }
 
@@ -475,22 +455,21 @@ async function handleUpdate(update) {
       if (message.text) {
         const incomingText = message.text;
 
-        // Allow customer to switch language anytime
         if (/english|eng/i.test(incomingText)) { state.lang = "en"; saveState(); }
         if (/amharic|አማርኛ/i.test(incomingText)) { state.lang = "am"; saveState(); }
         if (/orom/i.test(incomingText)) { state.lang = "om"; saveState(); }
 
-        //   console.log(`📩 Customer (${customerName}) [${state.lang}]: ${incomingText}`);
+        console.log(`📩 Customer (${customerName}) [${state.lang}]: ${incomingText}`);
 
         const ai = await askAI(customerChatId, incomingText, state.lang);
-        //   console.log(`🧠 Intent: ${ai.intent}`);
+        console.log(`🧠 Intent: ${ai.intent}`);
 
         // DOCUMENT REQUEST
         if (ai.intent === "DOCUMENT_REQUEST" && ai.document_type) {
           const entry = documentsRegistry[ai.document_type];
           const filePath = path.join(DOCUMENTS_DIR, entry.file);
 
-          // Contract type → escalate to owner
+          // Contract → always escalate
           if (entry.type === "contract") {
             await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
             const ownerMsg = await sendToOwner(
@@ -503,12 +482,11 @@ async function handleUpdate(update) {
             });
             state.blocked = true;
             saveState();
-            //   console.log(`📨 Contract escalated to owner`);
+            console.log(`📨 Contract escalated to owner`);
             return;
           }
 
-          // Public → send automatically
-                  // Public file — send only if the customer is established (≥ 20 messages)
+          // Public file
           const historyLen = (memory[String(customerChatId)] || []).length;
           const isEstablished = historyLen >= 20;
 
@@ -521,7 +499,6 @@ async function handleUpdate(update) {
           }
 
           if (!isEstablished) {
-            // First-time / short chat → do NOT auto-send. Reply politely + escalate to owner.
             if (ai.reply) {
               await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
             }
@@ -540,17 +517,18 @@ async function handleUpdate(update) {
             });
             state.blocked = true;
             saveState();
-         //   console.log(`📨 New-customer file request escalated to owner`);
+            console.log(`📨 New-customer file request escalated to owner`);
             return;
           }
 
-          // Established customer → send file directly
+          // Established → send file
           if (ai.reply) {
             await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
           }
           await sendTelegramDocument(businessConnectionId, customerChatId, filePath, entry.caption || entry.name);
-         //   console.log(`📄 Sent public document: ${entry.file}`);
+          console.log(`📄 Sent public document: ${entry.file}`);
           return;
+        }
 
         // HUMAN ESCALATION
         if (ai.intent === "HUMAN_ESCALATION") {
@@ -606,7 +584,6 @@ async function handleUpdate(update) {
         );
       }
 
-      // Unblock customer
       state.blocked = false;
       saveState();
       pendingQuestions.delete(replyTo);
@@ -619,7 +596,7 @@ async function handleUpdate(update) {
 }
 
 // ======================================================
-// HTTP SERVER (webhook + health check)
+// HTTP SERVER
 // ======================================================
 http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === WEBHOOK_PATH) {
