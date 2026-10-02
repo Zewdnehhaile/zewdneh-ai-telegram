@@ -132,7 +132,6 @@ async function sendTelegramPhoto(businessConnectionId, chatId, photoUrl, caption
   return result;
 }
 
-// Send a local PDF file to a customer
 async function sendTelegramDocument(businessConnectionId, chatId, filePath, caption = "") {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`;
 
@@ -152,7 +151,6 @@ async function sendTelegramDocument(businessConnectionId, chatId, filePath, capt
   return result;
 }
 
-// Send a document that owner forwarded by file_id
 async function sendTelegramDocumentByFileId(businessConnectionId, chatId, fileId, caption = "") {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`;
   const body = { chat_id: chatId, document: fileId };
@@ -174,7 +172,7 @@ async function sendToOwner(text) {
 }
 
 // ======================================================
-// BUILD SYSTEM PROMPT FOR GEMINI
+// BUILD SYSTEM PROMPT
 // ======================================================
 function buildSystemPrompt() {
   const docKeys = Object.keys(documentsRegistry);
@@ -279,18 +277,16 @@ async function askAI(chatId, customerMessage) {
     parsed = {
       intent: "UNKNOWN",
       document_type: null,
-      reply: "ይቅርታ፣ ጥያቄዎን ለሰው ሰራተኛ እናስተላልፋለን። / Sorry, forwarding your message to a staff member.",
+      reply: "ይቅርታ፣ ጥያቄዎን ለሰው ሰራተኛ እናስተላልፋለን።\nSorry, forwarding your message to a staff member.",
       escalation_reason: "Invalid AI response",
     };
   }
 
-  // Validate document_type — only allow registered keys
   if (parsed.document_type && !documentsRegistry[parsed.document_type]) {
     console.log(`⚠️ Invalid document_type from AI: ${parsed.document_type}`);
     parsed.document_type = null;
   }
 
-  // Validate intent
   const allowedIntents = [
     "GREETING","LOAN_TYPE_SELECTION","PAYDAY_LOAN","SALARY_LOAN","SALARY_ADVANCE","BUSINESS_LOAN",
     "LOAN_REQUIREMENTS","LOAN_60_90_DAYS","PAYMENT_INFORMATION","BANK_ACCOUNT_REQUEST",
@@ -333,7 +329,7 @@ async function main() {
         offset = update.update_id + 1;
 
         // ============ CUSTOMER MESSAGE (business) ============
-        if (update.business_message && update.business_message.text) {
+        if (update.business_message) {
           const message = update.business_message;
 
           // Ignore messages sent BY the owner
@@ -344,43 +340,28 @@ async function main() {
 
           const businessConnectionId = message.business_connection_id;
           const customerChatId = message.chat.id;
-          const incomingText = message.text;
           const customerName =
             message.from?.first_name || message.from?.username || "Customer";
 
-          console.log(`📩 Customer (${customerName}): ${incomingText}`);
+          // ---------- 1) Customer sent a DOCUMENT ----------
+          if (message.document) {
+            console.log(`📎 Customer (${customerName}) sent a document: ${message.document.file_name || "file"}`);
 
-          const ai = await askAI(customerChatId, incomingText);
-          console.log(`🧠 Intent: ${ai.intent}`);
-          console.log(`🤖 AI reply: ${ai.reply}`);
+            await sendTelegramMessage(
+              businessConnectionId,
+              customerChatId,
+              "ሰነዱን ተቀብለናል፣ በመመርመር ላይ ነን።\nWe received your document and are checking it."
+            );
 
-          // --- DOCUMENT REQUEST ---
-          if (ai.intent === "DOCUMENT_REQUEST" && ai.document_type) {
-            const entry = documentsRegistry[ai.document_type];
-            const filePath = path.join(DOCUMENTS_DIR, entry.file);
-
-            if (!fs.existsSync(filePath)) {
-              console.log(`❌ Missing file: ${filePath}`);
-              await sendTelegramMessage(
-                businessConnectionId, customerChatId,
-                "ይቅርታ፣ ፋይሉ ለጊዜው አልተገኘም። ለሰው ሰራተኛ እናስተላልፋለን። / Sorry, the file is unavailable. Forwarding to staff."
-              );
-              await sendToOwner(`⚠️ Missing document file: ${entry.file} (requested by ${customerName})`);
-              continue;
-            }
-
-            if (ai.reply) {
-              await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
-            }
-            await sendTelegramDocument(businessConnectionId, customerChatId, filePath, entry.caption || entry.name);
-            console.log(`📄 Sent document: ${entry.file}`);
-            continue;
-          }
-
-          // --- HUMAN ESCALATION ---
-          if (ai.intent === "HUMAN_ESCALATION") {
             const sent = await sendToOwner(
-              `❓ HUMAN ESCALATION\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\n\nMessage:\n"${incomingText}"\n\nReason:\n${ai.escalation_reason || "Requires human verification"}\n\n✍️ Reply to THIS message with the response to send to the customer.`
+              `📎 CUSTOMER DOCUMENT\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\nFile: ${message.document.file_name || "document"}\n${message.caption ? `Caption: ${message.caption}` : ""}\n\n✍️ Reply to THIS message with what to send to the customer.`
+            );
+
+            await sendTelegramDocumentByFileId(
+              null,
+              OWNER_CHAT_ID,
+              message.document.file_id,
+              `From ${customerName}`
             );
 
             pendingQuestions.set(sent.result.message_id, {
@@ -389,17 +370,97 @@ async function main() {
               customerName,
             });
 
-            if (ai.reply) {
-              await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
-            }
-
-            console.log(`📨 Escalated to owner (msg ${sent.result.message_id})`);
+            console.log(`📨 Document forwarded to owner (msg ${sent.result.message_id})`);
             continue;
           }
 
-          // --- NORMAL REPLY ---
-          await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
-          console.log("✅ Reply sent to customer");
+          // ---------- 2) Customer sent a PHOTO ----------
+          if (message.photo && message.photo.length > 0) {
+            console.log(`🖼 Customer (${customerName}) sent a photo`);
+
+            await sendTelegramMessage(
+              businessConnectionId,
+              customerChatId,
+              "ፎቶውን ተቀብለናል፣ በመመርመር ላይ ነን።\nWe received your photo and are checking it."
+            );
+
+            const sent = await sendToOwner(
+              `🖼 CUSTOMER PHOTO\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\n${message.caption ? `Caption: ${message.caption}` : ""}\n\n✍️ Reply to THIS message with what to send to the customer.`
+            );
+
+            const fileId = message.photo[message.photo.length - 1].file_id;
+            await sendTelegramPhoto(null, OWNER_CHAT_ID, fileId, `From ${customerName}`);
+
+            pendingQuestions.set(sent.result.message_id, {
+              businessConnectionId,
+              customerChatId,
+              customerName,
+            });
+
+            console.log(`📨 Photo forwarded to owner (msg ${sent.result.message_id})`);
+            continue;
+          }
+
+          // ---------- 3) Customer sent TEXT ----------
+          if (message.text) {
+            const incomingText = message.text;
+            console.log(`📩 Customer (${customerName}): ${incomingText}`);
+
+            const ai = await askAI(customerChatId, incomingText);
+            console.log(`🧠 Intent: ${ai.intent}`);
+            console.log(`🤖 AI reply: ${ai.reply}`);
+
+            // --- DOCUMENT REQUEST ---
+            if (ai.intent === "DOCUMENT_REQUEST" && ai.document_type) {
+              const entry = documentsRegistry[ai.document_type];
+              const filePath = path.join(DOCUMENTS_DIR, entry.file);
+
+              if (!fs.existsSync(filePath)) {
+                console.log(`❌ Missing file: ${filePath}`);
+                await sendTelegramMessage(
+                  businessConnectionId, customerChatId,
+                  "ይቅርታ፣ ፋይሉ ለጊዜው አልተገኘም። ለሰው ሰራተኛ እናስተላልፋለን።\nSorry, the file is unavailable. Forwarding to staff."
+                );
+                await sendToOwner(`⚠️ Missing document file: ${entry.file} (requested by ${customerName})`);
+                continue;
+              }
+
+              if (ai.reply) {
+                await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
+              }
+              await sendTelegramDocument(businessConnectionId, customerChatId, filePath, entry.caption || entry.name);
+              console.log(`📄 Sent document: ${entry.file}`);
+              continue;
+            }
+
+            // --- HUMAN ESCALATION ---
+            if (ai.intent === "HUMAN_ESCALATION") {
+              const sent = await sendToOwner(
+                `❓ HUMAN ESCALATION\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\n\nMessage:\n"${incomingText}"\n\nReason:\n${ai.escalation_reason || "Requires human verification"}\n\n✍️ Reply to THIS message with the response to send to the customer.`
+              );
+
+              pendingQuestions.set(sent.result.message_id, {
+                businessConnectionId,
+                customerChatId,
+                customerName,
+              });
+
+              if (ai.reply) {
+                await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
+              }
+
+              console.log(`📨 Escalated to owner (msg ${sent.result.message_id})`);
+              continue;
+            }
+
+            // --- NORMAL REPLY ---
+            await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
+            console.log("✅ Reply sent to customer");
+            continue;
+          }
+
+          // ---------- 4) Unsupported ----------
+          console.log(`ℹ️ Unsupported customer message type from ${customerName}`);
           continue;
         }
 

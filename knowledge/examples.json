@@ -7,11 +7,7 @@
       "intent": "GREETING",
       "approved_response": "ሰላም ጤና ይስጥልኝ\nድጋፍ ማይክሮ ፋይናንስ የጥሪ ማእከል ነው   እባክዋን ምን ልርዳዎ ?"
     },
-    {
-      "customer": "Hi",
-      "intent": "GREETING",
-      "approved_response": "ሰላም ጤና ይስጥልኝ\nድጋፍ ማይክሮ ፋይናንስ የጥሪ ማእከል ነው   እባክዋን ምን ልርዳዎ ?"
-    },
+
     {
       "customer": "ብድር እፈልጋለሁ",
       "intent": "LOAN_TYPE_SELECTION",
