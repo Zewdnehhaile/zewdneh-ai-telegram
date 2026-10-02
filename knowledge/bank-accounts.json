@@ -1,0 +1,26 @@
+{
+  "note": "Only accounts listed here are official Digaf Micro Credit Provider S.C. accounts. Never invent or modify account numbers.",
+
+  "accounts": [
+    { "bank": "ABAY BANK",      "account": "1882118766395018" },
+    { "bank": "AWASH BANK",     "account": "01304058221000" },
+    { "bank": "HIBRET BANK",    "account": "1161712191598015" },
+    { "bank": "COOP BANK",      "account": "1000014840773" },
+    { "bank": "BERHAN BANK",    "account": "113372029273" },
+    { "bank": "WEGAGEN BANK",   "account": "1035003010301" },
+    { "bank": "OROMIA BANK",    "account": "7534618" },
+    { "bank": "DASHEN BANK",    "account": "0770468866011" },
+    { "bank": "CBE BANK",       "account": "1000004332672" },
+    { "bank": "BUNA BANK",      "account": "2829601000175" },
+    { "bank": "TSEHAY BANK",    "account": "1000107391" },
+    { "bank": "LION BANK",      "account": "11182735125" },
+    { "bank": "ABYSSINIA BANK", "account": "103732662" },
+    { "bank": "GLOBAL BANK",    "account": "1472106893081" },
+    { "bank": "NIB BANK",       "account": "7000036321836" }
+  ],
+
+  "telebirr": {
+    "account": "592685",
+    "note": "Digaf Telebirr business account"
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "note": "Approved Digaf customer-service scripts. Do NOT change the meaning. Preserve Amharic wording exactly as given.",
+
+  "greeting": {
+    "keywords": ["hi", "hello", "hey", "ሰላም", "ሰላም ጤና ይስጥልኝ", "ጤና ይስጥልኝ"],
+    "reply": "ሰላም ጤና ይስጥልኝ\nድጋፍ ማይክሮ ፋይናንስ የጥሪ ማእከል ነው   እባክዋን ምን ልርዳዎ ?"
+  },
+
+  "loan_type_selection": {
+    "keywords": ["loan", "ብድር", "loan type", "የብድር አይነት", "የብድር አይነቶች"],
+    "reply": "ሰላም! ወደ ድጋፍ ማይክሮ ፋይናንስ እንኳን በደህና መጡ።\n\nእባክዎ የሚፈልጉትን የብድር አይነት ይምረጡ እና ምላሽዎን ያሳውቁን።\n\n1️⃣ የአስቸኳይ ደመወዝ ብድር\n            • የመስሪያ ቤት ስም ?\n            • የስራ ቦታ (ከተማ/ክፍለ ከተማ/ክልል) ?\n\n2️⃣ የንግድ ብድር (SME)\n           • የንግድ ዘርፍ ?\n           • የስራ ቦታ (ከተማ/ክፍለ ከተማ/ክልል) ?"
+  },
+
+  "emergency_salary_loan_requirements": {
+    "keywords": [
+      "emergency loan requirements",
+      "salary loan requirements",
+      "payday loan requirements",
+      "የአስቸኳይ ደመወዝ ብድር መስፈርት",
+      "የአስቸኳይ ብድር መስፈርት",
+      "የደመወዝ ብድር መስፈርት"
+    ],
+    "reply": "የአስቸኳይ ደመወዝ ብድር\n1,National ID) ይላኩለን\n2,የስራ መታወቂያ (Employment ID)\n3,የቋሚነት የስራ ደብዳቤ (Permanent Employment Letter)\nእናመሰግናለን።"
+  },
+
+  "business_loan_requirements": {
+    "keywords": [
+      "business loan requirements",
+      "sme requirements",
+      "የንግድ ብድር መስፈርት",
+      "የንግድ ብድር ምን ያስፈልጋል",
+      "ንግድ ብድር መስፈርት"
+    ],
+    "reply": "የንግድ ብድር ለማበደር\n1. የግል፦\n የታደሰ መታወቂያ/ብሄራዊ ወይም የቀበሌ/\n የዘጠና ቀን የባንክ ስቴትመንት\n የታደሰ ንግድ ፍቃድ፣ ንግድ ምዝገባና ቲን ነምበር"
+  },
+
+  "loan_60_90_days_requirements": {
+    "keywords": [
+      "60 90 days loan",
+      "60-90 days",
+      "60 90 requirements",
+      "የ60–90 ቀን ብድር መስፈርቶች",
+      "የ60 90 ቀን ብድር"
+    ],
+    "reply": "60–90 Days Loan Requirements\n\n1. National ID of both the Borrower (ተበዳሪ) and the Guarantor (ዋስ)\n2. Employment ID of both the Borrower and the Guarantor\n3. Bank Statement of the borrower for the last 3 months\n\nOnly salary payment pages\n3 pages, stamped by the bank\n\n—————\n\nየ60–90 ቀን ብድር መስፈርቶች\n\n1. የተበዳሪ እና የዋስ መታወቂያ (National ID)\n2. የተበዳሪ እና የዋስ የስራ መታወቂያ (Employment ID)\n3. የ3 ወር የተበዳሪ የባንክ ሂሳብ መግለጫ (Bank Statement)\n\nየደመወዝ መግቢያ ቀን ብቻ\n3 ገፆች\nየባንክ ማህተም ያለበት"
+  },
+
+  "service_area": {
+    "keywords": [
+      "service area",
+      "far away",
+      "distance",
+      "branch location",
+      "የአገልግሎት አካባቢ",
+      "ርቀት",
+      "አገልግሎት ማቅረብ"
+    ],
+    "reply": "ተቋሙ ከእኛ በርቀት ከፍ ካለ፣ በአሁኑ ሰአት አገልግሎት ማቅረብ አይቻልም።\nነገር ግን፣ አገልግሎት በተስፋፋ መስመር ሲጀመር በቀጥታ እናሳውቃለን።\nእናመሰግናለን።"
+  },
+
+  "non_bank_institutions": {
+    "keywords": [
+      "police",
+      "non bank",
+      "non-bank institution",
+      "ፖሊስ",
+      "ባንክ ያልሆነ ተቋም"
+    ],
+    "reply": "ለጊዜው እየሰጠን ያለው አገልግሎት ለባንክ ተቋማት ብቻ ነው።"
+  },
+
+  "escalation_default": {
+    "keywords": [],
+    "reply": "እባክዎ ትንሽ ይጠብቁ፣ ጥያቄዎን ለሰው ሰራተኛ እናስተላልፋለን።\nPlease wait a moment, we are forwarding your question to a Digaf staff member."
+  }
+}

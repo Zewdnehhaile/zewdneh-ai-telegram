@@ -4,26 +4,60 @@ const OpenAI = require("openai");
 const fs = require("fs");
 const path = require("path");
 
+// ======================================================
+// CONFIG
+// ======================================================
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+
 const openai = new OpenAI({
   apiKey: process.env.GEMINI_API_KEY,
   baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
 });
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID;
+const DOCUMENTS_DIR = path.join(__dirname, "documents");
+const KNOWLEDGE_DIR = path.join(__dirname, "knowledge");
+const MEMORY_FILE = path.join(__dirname, "memory.json");
+const MAX_HISTORY = 20;
 
-// ---------- Dummy web server (Render free tier needs a port) ----------
+// ======================================================
+// DUMMY WEB SERVER (Render free tier needs a port)
+// ======================================================
 http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("Zewdneh bot is alive\n");
+  res.end("Digaf support bot is alive\n");
 }).listen(process.env.PORT || 3000, () => {
   console.log("🌐 Dummy web server listening on port", process.env.PORT || 3000);
 });
 
-// ---------- Memory storage ----------
-const MEMORY_FILE = path.join(__dirname, "memory.json");
-const MAX_HISTORY = 100;
+// ======================================================
+// LOAD KNOWLEDGE FILES
+// ======================================================
+function loadJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (e) {
+    console.log(`⚠️ Could not load ${file}:`, e.message);
+    return null;
+  }
+}
 
+const documentsRegistry = loadJson(path.join(KNOWLEDGE_DIR, "documents.json")) || {};
+const bankAccounts = loadJson(path.join(KNOWLEDGE_DIR, "bank-accounts.json")) || { accounts: [] };
+const paymentRules = loadJson(path.join(KNOWLEDGE_DIR, "payment-rules.json")) || {};
+const responses = loadJson(path.join(KNOWLEDGE_DIR, "responses.json")) || {};
+const examples = loadJson(path.join(KNOWLEDGE_DIR, "examples.json")) || { examples: [] };
+
+console.log("📚 Loaded knowledge:");
+console.log("   - documents:", Object.keys(documentsRegistry).length);
+console.log("   - bank accounts:", bankAccounts.accounts.length);
+console.log("   - responses:", Object.keys(responses).length);
+console.log("   - examples:", examples.examples.length);
+
+// ======================================================
+// MEMORY
+// ======================================================
 let memory = {};
 if (fs.existsSync(MEMORY_FILE)) {
   try {
@@ -53,8 +87,9 @@ function addToHistory(chatId, role, content) {
   saveMemory();
 }
 
-// ---------- Telegram helpers ----------
-
+// ======================================================
+// TELEGRAM HELPERS
+// ======================================================
 async function getTelegramUpdates(offset = 0) {
   const url =
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates` +
@@ -62,36 +97,27 @@ async function getTelegramUpdates(offset = 0) {
     `&allowed_updates=${encodeURIComponent(
       JSON.stringify(["business_message", "message"])
     )}`;
-
   const response = await fetch(url);
   return response.json();
 }
 
 async function sendTelegramMessage(businessConnectionId, chatId, text) {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-
   const body = { chat_id: chatId, text };
-  if (businessConnectionId) {
-    body.business_connection_id = businessConnectionId;
-  }
+  if (businessConnectionId) body.business_connection_id = businessConnectionId;
 
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
   const result = await response.json();
-  if (!result.ok) {
-    throw new Error(`Telegram send error: ${JSON.stringify(result)}`);
-  }
+  if (!result.ok) throw new Error(`Telegram send error: ${JSON.stringify(result)}`);
   return result;
 }
 
-// ---------- Send a PHOTO to a chat ----------
 async function sendTelegramPhoto(businessConnectionId, chatId, photoUrl, caption = "") {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
-
   const body = { chat_id: chatId, photo: photoUrl };
   if (caption) body.caption = caption;
   if (businessConnectionId) body.business_connection_id = businessConnectionId;
@@ -101,11 +127,45 @@ async function sendTelegramPhoto(businessConnectionId, chatId, photoUrl, caption
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
   const result = await response.json();
-  if (!result.ok) {
-    throw new Error(`Telegram sendPhoto error: ${JSON.stringify(result)}`);
-  }
+  if (!result.ok) throw new Error(`Telegram sendPhoto error: ${JSON.stringify(result)}`);
+  return result;
+}
+
+// Send a local PDF file to a customer
+async function sendTelegramDocument(businessConnectionId, chatId, filePath, caption = "") {
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`;
+
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  if (businessConnectionId) form.append("business_connection_id", businessConnectionId);
+  if (caption) form.append("caption", caption);
+
+  const fileBuffer = fs.readFileSync(filePath);
+  const fileName = path.basename(filePath);
+  const blob = new Blob([fileBuffer], { type: "application/pdf" });
+  form.append("document", blob, fileName);
+
+  const response = await fetch(url, { method: "POST", body: form });
+  const result = await response.json();
+  if (!result.ok) throw new Error(`Telegram sendDocument error: ${JSON.stringify(result)}`);
+  return result;
+}
+
+// Send a document that owner forwarded by file_id
+async function sendTelegramDocumentByFileId(businessConnectionId, chatId, fileId, caption = "") {
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`;
+  const body = { chat_id: chatId, document: fileId };
+  if (caption) body.caption = caption;
+  if (businessConnectionId) body.business_connection_id = businessConnectionId;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json();
+  if (!result.ok) throw new Error(`Telegram sendDocument error: ${JSON.stringify(result)}`);
   return result;
 }
 
@@ -113,48 +173,149 @@ async function sendToOwner(text) {
   return sendTelegramMessage(null, OWNER_CHAT_ID, text);
 }
 
-// ---------- AI (text reply) ----------
+// ======================================================
+// BUILD SYSTEM PROMPT FOR GEMINI
+// ======================================================
+function buildSystemPrompt() {
+  const docKeys = Object.keys(documentsRegistry);
+  const bankList = bankAccounts.accounts
+    .map((a) => `${a.bank} → ${a.account}`)
+    .join("\n");
 
-async function askAI(chatId, message) {
-  addToHistory(chatId, "user", message);
+  const exampleText = examples.examples
+    .map((ex) => `Customer: ${ex.customer}\nIntent: ${ex.intent}\nApproved: ${ex.approved_response}`)
+    .join("\n---\n");
+
+  return `You are the official customer-service AI assistant for DIGAF MICRO CREDIT PROVIDER S.C. (ድጋፍ ማይክሮ ክሬዲት አቅራቢ አ.ማ).
+
+IDENTITY RULES:
+- You are polite, professional, and helpful — like a trained Digaf employee.
+- If a customer asks if you are human, say honestly that you are the Digaf customer-service AI assistant. Do NOT pretend to be a specific human.
+- Reply in the SAME language the customer uses: Amharic, English, or mixed.
+- Keep replies short and clear unless detailed info is required.
+- NEVER invent: loan amounts, interest rates, approval decisions, account balances, service areas, processing times, bank account numbers, or policies.
+- NEVER promise a loan approval.
+- NEVER claim you have checked an internal system.
+- If unsure → escalate to a human, do NOT guess.
+
+OUTPUT FORMAT — reply ONLY with valid JSON, no markdown, no extra text:
+
+{
+  "intent": "GREETING",
+  "document_type": null,
+  "reply": "text to send to customer",
+  "escalation_reason": null
+}
+
+Allowed intent values:
+GREETING, LOAN_TYPE_SELECTION, PAYDAY_LOAN, SALARY_LOAN, SALARY_ADVANCE, BUSINESS_LOAN,
+LOAN_REQUIREMENTS, LOAN_60_90_DAYS, PAYMENT_INFORMATION, BANK_ACCOUNT_REQUEST,
+TELEBIRR_PAYMENT, TELEBIRR_THIRD_PARTY_ACCOUNT, SERVICE_AREA, NON_BANK_INSTITUTION,
+DOCUMENT_REQUEST, GENERAL_INFORMATION, COMPLAINT, PAYMENT_DISPUTE,
+ACCOUNT_SPECIFIC_REQUEST, LOAN_APPROVAL_REQUEST, UNKNOWN, HUMAN_ESCALATION
+
+When the customer wants a PDF/document, set:
+"intent": "DOCUMENT_REQUEST",
+"document_type": "<one of: ${docKeys.join(", ")}>",
+"reply": "short friendly message like 'እነሆ ፋይሉ 📄' or 'Here is the file 📄'"
+
+When the case needs a human, set:
+"intent": "HUMAN_ESCALATION",
+"reply": "short polite holding message for the customer",
+"escalation_reason": "why it needs a human"
+
+==================================================
+APPROVED COMPANY KNOWLEDGE
+==================================================
+
+--- APPROVED RESPONSES ---
+${JSON.stringify(responses, null, 2)}
+
+--- APPROVED PAYMENT RULES ---
+${JSON.stringify(paymentRules, null, 2)}
+
+--- APPROVED BANK ACCOUNTS (only these are valid) ---
+${bankList}
+
+--- APPROVED CONVERSATION EXAMPLES ---
+${exampleText}
+
+==================================================
+ESCALATE TO HUMAN when:
+- Loan approval status
+- Account-specific balances
+- Payment disputes
+- Complaints
+- Anything requiring internal systems
+- Any question NOT covered by approved knowledge above
+
+Remember: accuracy > creativity. NEVER guess. NEVER invent. Reply with JSON only.`;
+}
+
+// ======================================================
+// AI CALL
+// ======================================================
+async function askAI(chatId, customerMessage) {
+  addToHistory(chatId, "user", customerMessage);
 
   const history = memory[String(chatId)] || [];
 
   const response = await openai.chat.completions.create({
-    model: "gemini-3.5-flash-lite",
+    model: GEMINI_MODEL,
     messages: [
-      {
-        role: "system",
-        content:
-          "You ARE Zewdneh. You are replying to Zewdneh's friends on Telegram as Zewdneh himself. " +
-          "Never say you are an AI, bot, program, or assistant. Never break character. " +
-          "Reply naturally, casually, and briefly — like a real friend texting on Telegram. " +
-          "Match the language the friend uses (Amharic, English, or mixed). " +
-          "Use casual, friendly tone. It's okay to use emojis sometimes. " +
-          "DEFAULT BEHAVIOR: just reply normally as Zewdneh would. Do NOT ask Zewdneh for permission for normal chat. " +
-          "ONLY use the ASK_ZEWDNEH format when the message is about: " +
-          "money, sending/receiving payments, meeting up in person, love/relationship, " +
-          "secrets, family issues, or something ONLY the real Zewdneh would know. " +
-          "Greetings, small talk, jokes, 'how are you', 'what's up', and casual chat MUST be answered directly without asking. " +
-          "When you DO need to ask, reply with exactly: " +
-          "[ASK_ZEWDNEH]: <the friend's message> — what should I reply?",
-      },
+      { role: "system", content: buildSystemPrompt() },
       ...history,
     ],
+    response_format: { type: "json_object" },
   });
 
-  const answer = response.choices[0].message.content;
-  addToHistory(chatId, "assistant", answer);
-  return answer;
+  const raw = response.choices[0].message.content;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    console.log("⚠️ Gemini returned non-JSON:", raw);
+    parsed = {
+      intent: "UNKNOWN",
+      document_type: null,
+      reply: "ይቅርታ፣ ጥያቄዎን ለሰው ሰራተኛ እናስተላልፋለን። / Sorry, forwarding your message to a staff member.",
+      escalation_reason: "Invalid AI response",
+    };
+  }
+
+  // Validate document_type — only allow registered keys
+  if (parsed.document_type && !documentsRegistry[parsed.document_type]) {
+    console.log(`⚠️ Invalid document_type from AI: ${parsed.document_type}`);
+    parsed.document_type = null;
+  }
+
+  // Validate intent
+  const allowedIntents = [
+    "GREETING","LOAN_TYPE_SELECTION","PAYDAY_LOAN","SALARY_LOAN","SALARY_ADVANCE","BUSINESS_LOAN",
+    "LOAN_REQUIREMENTS","LOAN_60_90_DAYS","PAYMENT_INFORMATION","BANK_ACCOUNT_REQUEST",
+    "TELEBIRR_PAYMENT","TELEBIRR_THIRD_PARTY_ACCOUNT","SERVICE_AREA","NON_BANK_INSTITUTION",
+    "DOCUMENT_REQUEST","GENERAL_INFORMATION","COMPLAINT","PAYMENT_DISPUTE",
+    "ACCOUNT_SPECIFIC_REQUEST","LOAN_APPROVAL_REQUEST","UNKNOWN","HUMAN_ESCALATION",
+  ];
+  if (!allowedIntents.includes(parsed.intent)) {
+    parsed.intent = "UNKNOWN";
+  }
+
+  addToHistory(chatId, "assistant", parsed.reply || "");
+  return parsed;
 }
 
-// ---------- Pending questions ----------
+// ======================================================
+// PENDING ESCALATIONS
+// ======================================================
 const pendingQuestions = new Map();
 
-// ---------- Main loop ----------
-
+// ======================================================
+// MAIN LOOP
+// ======================================================
 async function main() {
-  console.log("🤖 Zewdneh AI assistant is running...");
+  console.log("🏦 Digaf customer-service AI is running...");
   console.log("📡 Waiting for messages...");
 
   let offset = 0;
@@ -162,7 +323,6 @@ async function main() {
   while (true) {
     try {
       const data = await getTelegramUpdates(offset);
-
       if (!data.ok) {
         console.log("Telegram error:", data);
         await new Promise((r) => setTimeout(r, 3000));
@@ -172,102 +332,135 @@ async function main() {
       for (const update of data.result) {
         offset = update.update_id + 1;
 
-        // ============ 1) Friend message (business) ============
+        // ============ CUSTOMER MESSAGE (business) ============
         if (update.business_message && update.business_message.text) {
           const message = update.business_message;
 
-          // Ignore messages that YOU (the owner) sent to the friend
+          // Ignore messages sent BY the owner
           if (String(message.from?.id) === String(OWNER_CHAT_ID)) {
-            console.log(`↩️ Skipping owner's own outgoing message: ${message.text}`);
+            console.log(`↩️ Skipping owner's own outgoing message`);
             continue;
           }
+
           const businessConnectionId = message.business_connection_id;
-          const chatId = message.chat.id;
+          const customerChatId = message.chat.id;
           const incomingText = message.text;
+          const customerName =
+            message.from?.first_name || message.from?.username || "Customer";
 
-          console.log(`📩 Friend: ${incomingText}`);
+          console.log(`📩 Customer (${customerName}): ${incomingText}`);
 
-          const answer = await askAI(chatId, incomingText);
-          console.log(`🤖 AI: ${answer}`);
+          const ai = await askAI(customerChatId, incomingText);
+          console.log(`🧠 Intent: ${ai.intent}`);
+          console.log(`🤖 AI reply: ${ai.reply}`);
 
-          if (answer.trim().startsWith("[ASK_ZEWDNEH]")) {
-            const friendName =
-              message.from?.first_name || message.from?.username || "Friend";
+          // --- DOCUMENT REQUEST ---
+          if (ai.intent === "DOCUMENT_REQUEST" && ai.document_type) {
+            const entry = documentsRegistry[ai.document_type];
+            const filePath = path.join(DOCUMENTS_DIR, entry.file);
 
+            if (!fs.existsSync(filePath)) {
+              console.log(`❌ Missing file: ${filePath}`);
+              await sendTelegramMessage(
+                businessConnectionId, customerChatId,
+                "ይቅርታ፣ ፋይሉ ለጊዜው አልተገኘም። ለሰው ሰራተኛ እናስተላልፋለን። / Sorry, the file is unavailable. Forwarding to staff."
+              );
+              await sendToOwner(`⚠️ Missing document file: ${entry.file} (requested by ${customerName})`);
+              continue;
+            }
+
+            if (ai.reply) {
+              await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
+            }
+            await sendTelegramDocument(businessConnectionId, customerChatId, filePath, entry.caption || entry.name);
+            console.log(`📄 Sent document: ${entry.file}`);
+            continue;
+          }
+
+          // --- HUMAN ESCALATION ---
+          if (ai.intent === "HUMAN_ESCALATION") {
             const sent = await sendToOwner(
-              `❓ ${friendName} asked:\n"${incomingText}"\n\n✍️ Reply to THIS message with what I should send.`
+              `❓ HUMAN ESCALATION\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\n\nMessage:\n"${incomingText}"\n\nReason:\n${ai.escalation_reason || "Requires human verification"}\n\n✍️ Reply to THIS message with the response to send to the customer.`
             );
 
             pendingQuestions.set(sent.result.message_id, {
               businessConnectionId,
-              friendChatId: chatId,
-              friendName,
+              customerChatId,
+              customerName,
             });
 
-            console.log(`📨 Forwarded question to owner (msg ${sent.result.message_id})`);
+            if (ai.reply) {
+              await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
+            }
+
+            console.log(`📨 Escalated to owner (msg ${sent.result.message_id})`);
             continue;
           }
 
-          await sendTelegramMessage(businessConnectionId, chatId, answer);
-          console.log("✅ Reply sent to friend");
+          // --- NORMAL REPLY ---
+          await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
+          console.log("✅ Reply sent to customer");
           continue;
         }
 
-        // ============ 2) Owner reply (private chat) ============
-        if (update.message && update.message.text) {
+        // ============ OWNER REPLY (private chat) ============
+        if (update.message) {
           const msg = update.message;
           const fromId = msg.chat.id;
           const replyTo = msg.reply_to_message?.message_id;
 
           if (String(fromId) !== String(OWNER_CHAT_ID)) continue;
-
-          // ----- 2a) Owner sends a PHOTO to forward to a friend -----
-          if (
-            replyTo &&
-            pendingQuestions.has(replyTo) &&
-            msg.photo &&
-            msg.photo.length > 0
-          ) {
-            const pending = pendingQuestions.get(replyTo);
-            // get largest photo
-            const fileId = msg.photo[msg.photo.length - 1].file_id;
-            const caption = msg.caption || "";
-
-            await sendTelegramPhoto(
-              pending.businessConnectionId,
-              pending.friendChatId,
-              fileId,
-              caption
-            );
-
-            addToHistory(pending.friendChatId, "assistant", `[photo] ${caption}`);
-            pendingQuestions.delete(replyTo);
-
-            await sendToOwner(`✅ Photo sent to ${pending.friendName}`);
-            console.log(`✅ Owner photo forwarded to ${pending.friendName}`);
-            continue;
-          }
-
-          // ----- 2b) Owner sends TEXT reply -----
           if (!replyTo || !pendingQuestions.has(replyTo)) {
-            console.log("ℹ️ Owner message ignored (no pending question)");
+            console.log("ℹ️ Owner message ignored (no pending escalation)");
             continue;
           }
 
           const pending = pendingQuestions.get(replyTo);
-          pendingQuestions.delete(replyTo);
 
-          await sendTelegramMessage(
-            pending.businessConnectionId,
-            pending.friendChatId,
-            msg.text
-          );
+          // Owner replied with a DOCUMENT
+          if (msg.document) {
+            await sendTelegramDocumentByFileId(
+              pending.businessConnectionId,
+              pending.customerChatId,
+              msg.document.file_id,
+              msg.caption || ""
+            );
+            addToHistory(pending.customerChatId, "assistant", `[document] ${msg.caption || ""}`);
+            pendingQuestions.delete(replyTo);
+            await sendToOwner(`✅ Document sent to ${pending.customerName}`);
+            console.log(`✅ Owner document forwarded to ${pending.customerName}`);
+            continue;
+          }
 
-          addToHistory(pending.friendChatId, "assistant", msg.text);
+          // Owner replied with a PHOTO
+          if (msg.photo && msg.photo.length > 0) {
+            const fileId = msg.photo[msg.photo.length - 1].file_id;
+            await sendTelegramPhoto(
+              pending.businessConnectionId,
+              pending.customerChatId,
+              fileId,
+              msg.caption || ""
+            );
+            addToHistory(pending.customerChatId, "assistant", `[photo] ${msg.caption || ""}`);
+            pendingQuestions.delete(replyTo);
+            await sendToOwner(`✅ Photo sent to ${pending.customerName}`);
+            console.log(`✅ Owner photo forwarded to ${pending.customerName}`);
+            continue;
+          }
 
-          await sendToOwner(`✅ Sent to ${pending.friendName}`);
-          console.log(`✅ Owner reply forwarded to ${pending.friendName}`);
-          continue;
+          // Owner replied with TEXT
+          if (msg.text) {
+            await sendTelegramMessage(
+              pending.businessConnectionId,
+              pending.customerChatId,
+              msg.text
+            );
+            addToHistory(pending.customerChatId, "assistant", msg.text);
+            pendingQuestions.delete(replyTo);
+            await sendToOwner(`✅ Sent to ${pending.customerName}`);
+            console.log(`✅ Owner text forwarded to ${pending.customerName}`);
+            continue;
+          }
         }
       }
     } catch (error) {

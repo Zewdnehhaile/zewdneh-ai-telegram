@@ -1,0 +1,76 @@
+{
+  "note": "Approved conversation examples showing how Digaf staff reply. These are STYLE examples only. Do NOT treat customer words as official policy. Only 'approved_response' is official.",
+
+  "examples": [
+    {
+      "customer": "ሰላም",
+      "intent": "GREETING",
+      "approved_response": "ሰላም ጤና ይስጥልኝ\nድጋፍ ማይክሮ ፋይናንስ የጥሪ ማእከል ነው   እባክዋን ምን ልርዳዎ ?"
+    },
+    {
+      "customer": "Hi",
+      "intent": "GREETING",
+      "approved_response": "ሰላም ጤና ይስጥልኝ\nድጋፍ ማይክሮ ፋይናንስ የጥሪ ማእከል ነው   እባክዋን ምን ልርዳዎ ?"
+    },
+    {
+      "customer": "ብድር እፈልጋለሁ",
+      "intent": "LOAN_TYPE_SELECTION",
+      "approved_response": "ሰላም! ወደ ድጋፍ ማይክሮ ፋይናንስ እንኳን በደህና መጡ።\n\nእባክዎ የሚፈልጉትን የብድር አይነት ይምረጡ እና ምላሽዎን ያሳውቁን።\n\n1️⃣ የአስቸኳይ ደመወዝ ብድር\n            • የመስሪያ ቤት ስም ?\n            • የስራ ቦታ (ከተማ/ክፍለ ከተማ/ክልል) ?\n\n2️⃣ የንግድ ብድር (SME)\n           • የንግድ ዘርፍ ?\n           • የስራ ቦታ (ከተማ/ክፍለ ከተማ/ክልል) ?"
+    },
+    {
+      "customer": "የአስቸኳይ ብድር መስፈርት ምንድነው?",
+      "intent": "LOAN_REQUIREMENTS",
+      "approved_response": "የአስቸኳይ ደመወዝ ብድር\n1,National ID) ይላኩለን\n2,የስራ መታወቂያ (Employment ID)\n3,የቋሚነት የስራ ደብዳቤ (Permanent Employment Letter)\nእናመሰግናለን።"
+    },
+    {
+      "customer": "Can I pay using my friend's Telebirr?",
+      "intent": "TELEBIRR_THIRD_PARTY_ACCOUNT",
+      "approved_response": "ገቢ ከማድረግወ በፊት በቅድሚያ ማወቅ ያልንወት ነገር፡፡ \n \n1. ክፍያ የሚፈፀምበት የቴሌብር አካውንት ሲም ካርድ በሌላ ሰው ስም የወጣ ከሆነ፣ ደረሰኙ ላይ የሚወጣው ስም ሲም ካርዱ በተመዘገበበት ስለሚሆን ደምበኛውን መለየት አያስችልም  ክፍያ ተቀባይንተ የለውም:: \n \n2. በሌላ ሰው የቴሌብር አካውንት ተጠቅሞ Add note/Narrative ላይ የደምበኛውን ስም በማስገባት የሚደረግ ክፍያም ተቀባይንተ የለውም። \n \nስለ ትብብረዎ እናመሰግናለን።"
+    },
+    {
+      "customer": "Add note ላይ ስሜን ብጽፍ?",
+      "intent": "TELEBIRR_THIRD_PARTY_ACCOUNT",
+      "approved_response": "ገቢ ከማድረግወ በፊት በቅድሚያ ማወቅ ያልንወት ነገር፡፡ \n \n1. ክፍያ የሚፈፀምበት የቴሌብር አካውንት ሲም ካርድ በሌላ ሰው ስም የወጣ ከሆነ፣ ደረሰኙ ላይ የሚወጣው ስም ሲም ካርዱ በተመዘገበበት ስለሚሆን ደምበኛውን መለየት አያስችልም  ክፍያ ተቀባይንተ የለውም:: \n \n2. በሌላ ሰው የቴሌብር አካውንት ተጠቅሞ Add note/Narrative ላይ የደምበኛውን ስም በማስገባት የሚደረግ ክፍያም ተቀባይንተ የለውም። \n \nስለ ትብብረዎ እናመሰግናለን።"
+    },
+    {
+      "customer": "Where do I pay?",
+      "intent": "PAYMENT_INFORMATION",
+      "approved_response": "ውድ ደንበኛችን፣ ክፍያ ሲፈፅሙ ድጋፍ ማይክሮ ክሬዲት አቅራቢ አ.ማ በይፋ ያስተዋወቃቸውን የባንክ አካውንቶች ብቻ በመጠቀም እንዲፈፅሙ እናሳስባለን። ከድጋፍ ያልተመዘገቡ የባንክ አካውንቶች ጋር የሚደረግ ክፍያ ተቀባይነት የለውም።"
+    },
+    {
+      "customer": "Give me CBE account",
+      "intent": "BANK_ACCOUNT_REQUEST",
+      "approved_response": "CBE BANK — 1000004332672"
+    },
+    {
+      "customer": "ለፖሊስ ተቋም ብድር ትሰጣላችሁ?",
+      "intent": "NON_BANK_INSTITUTION",
+      "approved_response": "ለጊዜው እየሰጠን ያለው አገልግሎት ለባንክ ተቋማት ብቻ ነው።"
+    },
+    {
+      "customer": "ሰላም send me payday loan",
+      "intent": "PAYDAY_LOAN_DOCUMENT",
+      "approved_response": "[SEND_DOCUMENT:payday_loan]"
+    },
+    {
+      "customer": "send business loan pdf",
+      "intent": "BUSINESS_LOAN_DOCUMENT",
+      "approved_response": "[SEND_DOCUMENT:business_loan]"
+    },
+    {
+      "customer": "የደመወዝ ብድር መረጃ ላክልኝ",
+      "intent": "SALARY_LOAN_DOCUMENT",
+      "approved_response": "[SEND_DOCUMENT:salary_loan]"
+    },
+    {
+      "customer": "salary advance pdf please",
+      "intent": "SALARY_ADVANCE_DOCUMENT",
+      "approved_response": "[SEND_DOCUMENT:salary_advance]"
+    },
+    {
+      "customer": "Has my loan been approved?",
+      "intent": "HUMAN_ESCALATION",
+      "approved_response": "[ESCALATE:Loan approval status requires human verification]"
+    }
+  ]
+}

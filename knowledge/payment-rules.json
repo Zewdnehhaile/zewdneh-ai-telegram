@@ -1,0 +1,18 @@
+{
+  "note": "Approved Digaf Micro Credit Provider S.C. payment rules. Do NOT modify wording. Never invent bank accounts. Only use accounts from bank-accounts.json.",
+
+  "general_bank_payment_rule": {
+    "approved_message_am": "ውድ ደንበኛችን፣ ክፍያ ሲፈፅሙ ድጋፍ ማይክሮ ክሬዲት አቅራቢ አ.ማ በይፋ ያስተዋወቃቸውን የባንክ አካውንቶች ብቻ በመጠቀም እንዲፈፅሙ እናሳስባለን። ከድጋፍ ያልተመዘገቡ የባንክ አካውንቶች ጋር የሚደረግ ክፍያ ተቀባይነት የለውም።",
+    "approved_message_en": "Dear customer, please make payments ONLY to the official Digaf Micro Credit Provider S.C. bank accounts. Payments to non-registered accounts are not accepted."
+  },
+
+  "telebirr_business_account": {
+    "account": "592685",
+    "approved_message_am": "ውድ ደንበኛችን፣ ከድጋፍ አነስተኛ ብድር አቅራቢ አ.ማ የተበደሩትን ገንዘብ ክፍያ ሲፈፅሙ ከግል የTelebirr መለያዎ ብቻ በመጠቀም ወደ ድጋፍ የTelebirr የንግድ መለያ (592685) እንዲፈፅሙ እናሳስባለን።"
+  },
+
+  "telebirr_third_party_rule": {
+    "summary_en": "Payments using a Telebirr account/SIM registered under another person's name are NOT accepted, even if the customer writes their own name in Add Note/Narrative.",
+    "approved_message_am": "ገቢ ከማድረግወ በፊት በቅድሚያ ማወቅ ያልንወት ነገር፡፡ \n \n1. ክፍያ የሚፈፀምበት የቴሌብር አካውንት ሲም ካርድ በሌላ ሰው ስም የወጣ ከሆነ፣ ደረሰኙ ላይ የሚወጣው ስም ሲም ካርዱ በተመዘገበበት ስለሚሆን ደምበኛውን መለየት አያስችልም  ክፍያ ተቀባይንተ የለውም:: \n \n2. በሌላ ሰው የቴሌብር አካውንት ተጠቅሞ Add note/Narrative ላይ የደምበኛውን ስም በማስገባት የሚደረግ ክፍያም ተቀባይንተ የለውም። \n \nስለ ትብብረዎ እናመሰግናለን።"
+  }
+}

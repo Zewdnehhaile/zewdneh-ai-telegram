@@ -1,0 +1,82 @@
+{
+  "payday_loan": {
+    "name": "Payday Loan",
+    "keywords": [
+      "payday loan",
+      "pay day loan",
+      "payday",
+      "የአስቸኳይ ብድር",
+      "የአስቸኳይ ደመወዝ ብድር",
+      "አስቸኳይ ብድር"
+    ],
+    "file": "payday-loan.pdf",
+    "caption": "Digaf Payday Loan — Contract"
+  },
+
+  "business_loan": {
+    "name": "Business Loan",
+    "keywords": [
+      "business loan",
+      "business",
+      "sme",
+      "sme loan",
+      "የንግድ ብድር",
+      "ንግድ ብድር"
+    ],
+    "file": "business-loan.pdf",
+    "caption": "Digaf Business Loan — Contract"
+  },
+
+  "salary_advance": {
+    "name": "Salary Advance",
+    "keywords": [
+      "salary advance",
+      "advance",
+      "የደመወዝ ቅድመ ክፍያ",
+      "ቅድመ ክፍያ"
+    ],
+    "file": "salary-advance.pdf",
+    "caption": "Digaf Salary Advance — Contract"
+  },
+
+  "guarantee_form": {
+    "name": "Guarantee Form (ዋስ)",
+    "keywords": [
+      "guarantee form",
+      "guarantee",
+      "wase",
+      "ዋስ",
+      "የዋስ ፎርም"
+    ],
+    "file": "guarantee-form.pdf",
+    "caption": "Digaf Guarantee Form (ዋስ)"
+  },
+
+  "payday_loan_oromifa": {
+    "name": "Payday Loan (Oromifa)",
+    "keywords": [
+      "payday oromifa",
+      "payday loan oromifa",
+      "oromifa payday",
+      "ኦሮሚፋ ብድር",
+      "oromifa"
+    ],
+    "file": "payday-loan-oromifa.pdf",
+    "caption": "Digaf Payday Loan (Oromifa)"
+  }
+  ,
+
+  "withdraw_form": {
+    "name": "Saving Withdraw Form",
+    "keywords": [
+      "withdraw form",
+      "withdrawal form",
+      "saving withdraw",
+      "savings withdrawal",
+      "የቁጠባ ማውጫ ፎርም",
+      "ወጪ ፎርም"
+    ],
+    "file": "withdraw-form.pdf",
+    "caption": "Digaf Savings Withdraw Form"
+  }
+}
