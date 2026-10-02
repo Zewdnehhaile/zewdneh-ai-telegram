@@ -23,8 +23,11 @@ const KNOWLEDGE_DIR = path.join(__dirname, "knowledge");
 const MEMORY_FILE = path.join(__dirname, "memory.json");
 const MAX_HISTORY = 20;
 
+// Phone validation: 09XXXXXXXX  OR  +2519XXXXXXXX
+const PHONE_REGEX = /^(09\d{8}|\+2519\d{8})$/;
+
 // ======================================================
-// LOAD KNOWLEDGE FILES
+// LOAD KNOWLEDGE
 // ======================================================
 function loadJson(file) {
   try {
@@ -48,15 +51,60 @@ console.log("   - responses:", Object.keys(responses).length);
 console.log("   - examples:", examples.examples.length);
 
 // ======================================================
-// MEMORY
+// CUSTOMER STATE (per chat)
+// ======================================================
+// state[chatId] = {
+//   lang: "am" | "en" | "om" | null,
+//   awaiting: null | "language" | "name_phone" | "resend_file",
+//   tempName: string | null,
+//   tempPhone: string | null,
+//   blocked: boolean  // true if a request is pending owner reply
+// }
+
+let customerState = {};
+
+function saveState() {
+  try {
+    fs.writeFileSync(path.join(__dirname, "state.json"), JSON.stringify(customerState, null, 2));
+  } catch (e) {}
+}
+
+function loadState() {
+  try {
+    const f = path.join(__dirname, "state.json");
+    if (fs.existsSync(f)) {
+      customerState = JSON.parse(fs.readFileSync(f, "utf8"));
+      console.log("🧠 Loaded customer state for", Object.keys(customerState).length, "chats");
+    }
+  } catch (e) {
+    customerState = {};
+  }
+}
+loadState();
+
+function getState(chatId) {
+  const key = String(chatId);
+  if (!customerState[key]) {
+    customerState[key] = {
+      lang: null,
+      awaiting: "language", // first time → must choose language
+      tempName: null,
+      tempPhone: null,
+      blocked: false,
+    };
+    saveState();
+  }
+  return customerState[key];
+}
+
+// ======================================================
+// MEMORY (conversation history)
 // ======================================================
 let memory = {};
 if (fs.existsSync(MEMORY_FILE)) {
   try {
     memory = JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
-    console.log("🧠 Loaded memory for", Object.keys(memory).length, "chats");
   } catch (e) {
-    console.log("⚠️ Could not load memory:", e.message);
     memory = {};
   }
 }
@@ -64,9 +112,7 @@ if (fs.existsSync(MEMORY_FILE)) {
 function saveMemory() {
   try {
     fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2));
-  } catch (e) {
-    console.log("⚠️ Could not save memory:", e.message);
-  }
+  } catch (e) {}
 }
 
 function addToHistory(chatId, role, content) {
@@ -155,7 +201,7 @@ async function sendToOwner(text) {
 // ======================================================
 // BUILD SYSTEM PROMPT
 // ======================================================
-function buildSystemPrompt() {
+function buildSystemPrompt(lang) {
   const docKeys = Object.keys(documentsRegistry);
   const bankList = bankAccounts.accounts
     .map((a) => `${a.bank} → ${a.account}`)
@@ -165,24 +211,29 @@ function buildSystemPrompt() {
     .map((ex) => `Customer: ${ex.customer}\nIntent: ${ex.intent}\nApproved: ${ex.approved_response}`)
     .join("\n---\n");
 
+  const langName = { am: "Amharic", en: "English", om: "Afaan Oromoo" }[lang] || "Amharic";
+
   return `You are the official customer-service AI assistant for DIGAF MICRO CREDIT PROVIDER S.C. (ድጋፍ ማይክሮ ክሬዲት አቅራቢ አ.ማ).
+
+CUSTOMER'S CHOSEN LANGUAGE: ${langName}
+→ ALWAYS reply in ${langName}. If the customer writes in another language, still use ${langName} unless they ask to switch.
 
 IDENTITY RULES:
 - You are polite, professional, and helpful — like a trained Digaf employee.
 - If a customer asks if you are human, say honestly that you are the Digaf customer-service AI assistant. Do NOT pretend to be a specific human.
-- Reply in the SAME language the customer uses: Amharic, English, or mixed.
 - Keep replies short and clear unless detailed info is required.
 - NEVER invent: loan amounts, interest rates, approval decisions, account balances, service areas, processing times, bank account numbers, or policies.
 - NEVER promise a loan approval.
 - NEVER claim you have checked an internal system.
-- If unsure → escalate to a human, do NOT guess.
+- If unsure → say we will respond soon. NEVER say "forwarding to staff" or "forwarding to a human" or "ለሰው ሰራተኛ እናስተላልፋለን".
+- If escalation needed, use: "Please wait a moment, we will respond to you soon." (translated to ${langName})
 
 OUTPUT FORMAT — reply ONLY with valid JSON, no markdown, no extra text:
 
 {
   "intent": "GREETING",
   "document_type": null,
-  "reply": "text to send to customer",
+  "reply": "text to send to customer (in ${langName})",
   "escalation_reason": null
 }
 
@@ -196,11 +247,11 @@ ACCOUNT_SPECIFIC_REQUEST, LOAN_APPROVAL_REQUEST, UNKNOWN, HUMAN_ESCALATION
 When the customer wants a PDF/document, set:
 "intent": "DOCUMENT_REQUEST",
 "document_type": "<one of: ${docKeys.join(", ")}>",
-"reply": "short friendly message like 'እነሆ ፋይሉ 📄' or 'Here is the file 📄'"
+"reply": "short friendly message in ${langName}"
 
 When the case needs a human, set:
 "intent": "HUMAN_ESCALATION",
-"reply": "short polite holding message for the customer",
+"reply": "Please wait a moment, we will respond to you soon. (in ${langName})",
 "escalation_reason": "why it needs a human"
 
 ==================================================
@@ -219,52 +270,39 @@ ${bankList}
 --- APPROVED CONVERSATION EXAMPLES ---
 ${exampleText}
 
-==================================================
-ESCALATE TO HUMAN when:
-- Loan approval status
-- Account-specific balances
-- Payment disputes
-- Complaints
-- Anything requiring internal systems
-- Any question NOT covered by approved knowledge above
-
 Remember: accuracy > creativity. NEVER guess. NEVER invent. Reply with JSON only.`;
 }
 
 // ======================================================
 // AI CALL
 // ======================================================
-async function askAI(chatId, customerMessage) {
+async function askAI(chatId, customerMessage, lang) {
   addToHistory(chatId, "user", customerMessage);
-
   const history = memory[String(chatId)] || [];
 
   const response = await openai.chat.completions.create({
     model: GEMINI_MODEL,
     messages: [
-      { role: "system", content: buildSystemPrompt() },
+      { role: "system", content: buildSystemPrompt(lang) },
       ...history,
     ],
     response_format: { type: "json_object" },
   });
 
   const raw = response.choices[0].message.content;
-
   let parsed;
   try {
     parsed = JSON.parse(raw);
   } catch (e) {
-    console.log("⚠️ Gemini returned non-JSON:", raw);
     parsed = {
       intent: "UNKNOWN",
       document_type: null,
-      reply: "ይቅርታ፣ ጥያቄዎን ለሰው ሰራተኛ እናስተላልፋለን።\nSorry, forwarding your message to a staff member.",
+      reply: "Please wait a moment, we will respond to you soon.",
       escalation_reason: "Invalid AI response",
     };
   }
 
   if (parsed.document_type && !documentsRegistry[parsed.document_type]) {
-    console.log(`⚠️ Invalid document_type from AI: ${parsed.document_type}`);
     parsed.document_type = null;
   }
 
@@ -275,16 +313,14 @@ async function askAI(chatId, customerMessage) {
     "DOCUMENT_REQUEST","GENERAL_INFORMATION","COMPLAINT","PAYMENT_DISPUTE",
     "ACCOUNT_SPECIFIC_REQUEST","LOAN_APPROVAL_REQUEST","UNKNOWN","HUMAN_ESCALATION",
   ];
-  if (!allowedIntents.includes(parsed.intent)) {
-    parsed.intent = "UNKNOWN";
-  }
+  if (!allowedIntents.includes(parsed.intent)) parsed.intent = "UNKNOWN";
 
   addToHistory(chatId, "assistant", parsed.reply || "");
   return parsed;
 }
 
 // ======================================================
-// PENDING ESCALATIONS
+// PENDING ESCALATIONS (owner replies mapped to customer)
 // ======================================================
 const pendingQuestions = new Map();
 
@@ -297,196 +333,256 @@ async function handleUpdate(update) {
     if (update.business_message) {
       const message = update.business_message;
 
-      // Ignore messages sent BY the owner
-      if (String(message.from?.id) === String(OWNER_CHAT_ID)) {
-        console.log(`↩️ Skipping owner's own outgoing message`);
-        return;
-      }
+      if (String(message.from?.id) === String(OWNER_CHAT_ID)) return;
 
       const businessConnectionId = message.business_connection_id;
       const customerChatId = message.chat.id;
-      const customerName =
-        message.from?.first_name || message.from?.username || "Customer";
+      const customerName = message.from?.first_name || message.from?.username || "Customer";
+      const state = getState(customerChatId);
 
-      // ---------- 1) Customer sent a DOCUMENT ----------
-      if (message.document) {
-        console.log(`📎 Customer (${customerName}) sent a document: ${message.document.file_name || "file"}`);
-
-        await sendTelegramMessage(
-          businessConnectionId,
-          customerChatId,
-          "ሰነዱን ተቀብለናል፣ በመመርመር ላይ ነን።\nWe received your document and are checking it."
-        );
-
-        const sent = await sendToOwner(
-          `📎 CUSTOMER DOCUMENT\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\nFile: ${message.document.file_name || "document"}\n${message.caption ? `Caption: ${message.caption}` : ""}\n\n✍️ Reply to THIS message with what to send to the customer.`
-        );
-
-        await sendTelegramDocumentByFileId(
-          null,
-          OWNER_CHAT_ID,
-          message.document.file_id,
-          `From ${customerName}`
-        );
-
-        pendingQuestions.set(sent.result.message_id, {
-          businessConnectionId,
-          customerChatId,
-          customerName,
-        });
-
-        console.log(`📨 Document forwarded to owner (msg ${sent.result.message_id})`);
+      // ---------- BLOCK: if a request is pending owner reply ----------
+      if (state.blocked) {
+        console.log(`🚫 Blocked: ${customerName} has a pending request`);
         return;
       }
 
-      // ---------- 2) Customer sent a PHOTO ----------
-      if (message.photo && message.photo.length > 0) {
-        console.log(`🖼 Customer (${customerName}) sent a photo`);
-
-        await sendTelegramMessage(
-          businessConnectionId,
-          customerChatId,
-          "ፎቶውን ተቀብለናል፣ በመመርመር ላይ ነን።\nWe received your photo and are checking it."
-        );
-
-        const sent = await sendToOwner(
-          `🖼 CUSTOMER PHOTO\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\n${message.caption ? `Caption: ${message.caption}` : ""}\n\n✍️ Reply to THIS message with what to send to the customer.`
-        );
-
-        const fileId = message.photo[message.photo.length - 1].file_id;
-        await sendTelegramPhoto(null, OWNER_CHAT_ID, fileId, `From ${customerName}`);
-
-        pendingQuestions.set(sent.result.message_id, {
-          businessConnectionId,
-          customerChatId,
-          customerName,
-        });
-
-        console.log(`📨 Photo forwarded to owner (msg ${sent.result.message_id})`);
+      // ---------- LANGUAGE MENU (first time) ----------
+      if (state.awaiting === "language") {
+        const text = (message.text || "").trim();
+        if (text === "1" || /amharic|አማርኛ/i.test(text)) {
+          state.lang = "am";
+          state.awaiting = null;
+          saveState();
+          await sendTelegramMessage(businessConnectionId, customerChatId, "እንኳን በደህና መጡ። እንዴት ልርዳዎት?");
+          return;
+        }
+        if (text === "2" || /english|eng/i.test(text)) {
+          state.lang = "en";
+          state.awaiting = null;
+          saveState();
+          await sendTelegramMessage(businessConnectionId, customerChatId, "Welcome. How can I help you?");
+          return;
+        }
+        if (text === "3" || /orom/i.test(text)) {
+          state.lang = "om";
+          state.awaiting = null;
+          saveState();
+          await sendTelegramMessage(businessConnectionId, customerChatId, "Baga nagaan dhuftan. Akkamittin isin gargaaruu danda'a?");
+          return;
+        }
+        // didn't pick → show menu again
+        await sendTelegramMessage(businessConnectionId, customerChatId, responses.language_menu.reply);
         return;
       }
 
-      // ---------- 3) Customer sent TEXT ----------
+      // ---------- AWAITING NAME + PHONE ----------
+      if (state.awaiting === "name_phone") {
+        const text = (message.text || "").trim();
+        const parts = text.split(/\s+/);
+
+        // Look for phone
+        const phoneMatch = text.match(/(09\d{8}|\+2519\d{8})/);
+        const phone = phoneMatch ? phoneMatch[0] : null;
+
+        // Name = everything except the phone, must have at least 2 chars
+        const namePart = text.replace(phone || "", "").trim();
+
+        if (!phone || !PHONE_REGEX.test(phone)) {
+          await sendTelegramMessage(
+            businessConnectionId, customerChatId,
+            responses.invalid_phone[`reply_${state.lang || "am"}`] || responses.invalid_phone.reply_am
+          );
+          return;
+        }
+
+        if (!namePart || namePart.length < 2) {
+          await sendTelegramMessage(
+            businessConnectionId, customerChatId,
+            responses.ask_name_phone[`reply_${state.lang || "am"}`] || responses.ask_name_phone.reply_am
+          );
+          return;
+        }
+
+        // Save
+        state.tempName = namePart;
+        state.tempPhone = phone;
+        state.awaiting = "resend_file";
+        saveState();
+
+        await sendTelegramMessage(
+          businessConnectionId, customerChatId,
+          responses.resend_file[`reply_${state.lang || "am"}`] || responses.resend_file.reply_am
+        );
+        return;
+      }
+
+      // ---------- AWAITING RESEND OF FILE ----------
+      if (state.awaiting === "resend_file") {
+        if (message.document || (message.photo && message.photo.length > 0)) {
+          // Good — forward to owner
+          const fileInfo = message.document
+            ? `📎 Document: ${message.document.file_name || "file"}`
+            : `🖼 Photo`;
+
+          const ownerMsg = await sendToOwner(
+            `📥 VERIFIED CUSTOMER FILE\n\nName: ${state.tempName}\nPhone: ${state.tempPhone}\nChat ID: ${customerChatId}\n${fileInfo}\n\n✍️ Reply to THIS message with what to send to the customer.`
+          );
+
+          // Forward the file to owner
+          if (message.document) {
+            await sendTelegramDocumentByFileId(null, OWNER_CHAT_ID, message.document.file_id, `From ${state.tempName}`);
+          } else {
+            const fileId = message.photo[message.photo.length - 1].file_id;
+            await sendTelegramPhoto(null, OWNER_CHAT_ID, fileId, `From ${state.tempName}`);
+          }
+
+          pendingQuestions.set(ownerMsg.result.message_id, {
+            businessConnectionId,
+            customerChatId,
+            customerName: state.tempName,
+          });
+
+          state.blocked = true;
+          state.awaiting = null;
+          saveState();
+
+          await sendTelegramMessage(
+            businessConnectionId, customerChatId,
+            responses.will_respond_soon[`reply_${state.lang || "am"}`] || responses.will_respond_soon.reply_am
+          );
+          return;
+        }
+
+        await sendTelegramMessage(
+          businessConnectionId, customerChatId,
+          responses.resend_file[`reply_${state.lang || "am"}`] || responses.resend_file.reply_am
+        );
+        return;
+      }
+
+      // ---------- FIRST FILE, needs identity ----------
+      if (message.document || (message.photo && message.photo.length > 0)) {
+        // Reject and ask for info
+        const ask = responses.ask_name_phone[`reply_${state.lang || "am"}`] || responses.ask_name_phone.reply_am;
+        await sendTelegramMessage(businessConnectionId, customerChatId, ask);
+        state.awaiting = "name_phone";
+        saveState();
+        console.log(`🛡 Rejected file from ${customerName} — waiting for identity`);
+        return;
+      }
+
+      // ---------- TEXT MESSAGE ----------
       if (message.text) {
         const incomingText = message.text;
-        console.log(`📩 Customer (${customerName}): ${incomingText}`);
 
-        const ai = await askAI(customerChatId, incomingText);
+        // Allow customer to switch language anytime
+        if (/english|eng/i.test(incomingText)) { state.lang = "en"; saveState(); }
+        if (/amharic|አማርኛ/i.test(incomingText)) { state.lang = "am"; saveState(); }
+        if (/orom/i.test(incomingText)) { state.lang = "om"; saveState(); }
+
+        console.log(`📩 Customer (${customerName}) [${state.lang}]: ${incomingText}`);
+
+        const ai = await askAI(customerChatId, incomingText, state.lang);
         console.log(`🧠 Intent: ${ai.intent}`);
-        console.log(`🤖 AI reply: ${ai.reply}`);
 
-        // --- DOCUMENT REQUEST ---
+        // DOCUMENT REQUEST
         if (ai.intent === "DOCUMENT_REQUEST" && ai.document_type) {
           const entry = documentsRegistry[ai.document_type];
           const filePath = path.join(DOCUMENTS_DIR, entry.file);
 
-          if (!fs.existsSync(filePath)) {
-            console.log(`❌ Missing file: ${filePath}`);
-            await sendTelegramMessage(
-              businessConnectionId, customerChatId,
-              "ይቅርታ፣ ፋይሉ ለጊዜው አልተገኘም። ለሰው ሰራተኛ እናስተላልፋለን።\nSorry, the file is unavailable. Forwarding to staff."
+          // Contract type → escalate to owner
+          if (entry.type === "contract") {
+            await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
+            const ownerMsg = await sendToOwner(
+              `📄 CONTRACT REQUEST\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\nDocument: ${entry.name}\n\n✍️ Reply to THIS message to send the file (or a message) to the customer.`
             );
-            await sendToOwner(`⚠️ Missing document file: ${entry.file} (requested by ${customerName})`);
+            pendingQuestions.set(ownerMsg.result.message_id, {
+              businessConnectionId,
+              customerChatId,
+              customerName,
+            });
+            state.blocked = true;
+            saveState();
+            console.log(`📨 Contract escalated to owner`);
             return;
           }
 
+          // Public → send automatically
+          if (!fs.existsSync(filePath)) {
+            await sendTelegramMessage(
+              businessConnectionId, customerChatId,
+              responses.will_respond_soon[`reply_${state.lang || "am"}`]
+            );
+            return;
+          }
           if (ai.reply) {
             await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
           }
           await sendTelegramDocument(businessConnectionId, customerChatId, filePath, entry.caption || entry.name);
-          console.log(`📄 Sent document: ${entry.file}`);
+          console.log(`📄 Sent public document: ${entry.file}`);
           return;
         }
 
-        // --- HUMAN ESCALATION ---
+        // HUMAN ESCALATION
         if (ai.intent === "HUMAN_ESCALATION") {
-          const sent = await sendToOwner(
-            `❓ HUMAN ESCALATION\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\n\nMessage:\n"${incomingText}"\n\nReason:\n${ai.escalation_reason || "Requires human verification"}\n\n✍️ Reply to THIS message with the response to send to the customer.`
+          const ownerMsg = await sendToOwner(
+            `❓ ESCALATION\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\n\nMessage:\n"${incomingText}"\n\nReason: ${ai.escalation_reason || "Requires human verification"}\n\n✍️ Reply to THIS message.`
           );
-
-          pendingQuestions.set(sent.result.message_id, {
+          pendingQuestions.set(ownerMsg.result.message_id, {
             businessConnectionId,
             customerChatId,
             customerName,
           });
+          state.blocked = true;
+          saveState();
 
           if (ai.reply) {
             await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
           }
-
-          console.log(`📨 Escalated to owner (msg ${sent.result.message_id})`);
           return;
         }
 
-        // --- NORMAL REPLY ---
+        // NORMAL REPLY
         await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
-        console.log("✅ Reply sent to customer");
         return;
       }
-
-      // ---------- 4) Unsupported ----------
-      console.log(`ℹ️ Unsupported customer message type from ${customerName}`);
-      return;
     }
 
-    // ============ OWNER REPLY (private chat) ============
+    // ============ OWNER REPLY ============
     if (update.message) {
       const msg = update.message;
       const fromId = msg.chat.id;
       const replyTo = msg.reply_to_message?.message_id;
 
       if (String(fromId) !== String(OWNER_CHAT_ID)) return;
-      if (!replyTo || !pendingQuestions.has(replyTo)) {
-        console.log("ℹ️ Owner message ignored (no pending escalation)");
-        return;
-      }
+      if (!replyTo || !pendingQuestions.has(replyTo)) return;
 
       const pending = pendingQuestions.get(replyTo);
+      const state = getState(pending.customerChatId);
 
-      // Owner replied with a DOCUMENT
       if (msg.document) {
         await sendTelegramDocumentByFileId(
-          pending.businessConnectionId,
-          pending.customerChatId,
-          msg.document.file_id,
-          msg.caption || ""
+          pending.businessConnectionId, pending.customerChatId,
+          msg.document.file_id, msg.caption || ""
         );
-        addToHistory(pending.customerChatId, "assistant", `[document] ${msg.caption || ""}`);
-        pendingQuestions.delete(replyTo);
-        await sendToOwner(`✅ Document sent to ${pending.customerName}`);
-        console.log(`✅ Owner document forwarded to ${pending.customerName}`);
-        return;
-      }
-
-      // Owner replied with a PHOTO
-      if (msg.photo && msg.photo.length > 0) {
+      } else if (msg.photo && msg.photo.length > 0) {
         const fileId = msg.photo[msg.photo.length - 1].file_id;
         await sendTelegramPhoto(
-          pending.businessConnectionId,
-          pending.customerChatId,
-          fileId,
-          msg.caption || ""
+          pending.businessConnectionId, pending.customerChatId,
+          fileId, msg.caption || ""
         );
-        addToHistory(pending.customerChatId, "assistant", `[photo] ${msg.caption || ""}`);
-        pendingQuestions.delete(replyTo);
-        await sendToOwner(`✅ Photo sent to ${pending.customerName}`);
-        console.log(`✅ Owner photo forwarded to ${pending.customerName}`);
-        return;
+      } else if (msg.text) {
+        await sendTelegramMessage(
+          pending.businessConnectionId, pending.customerChatId, msg.text
+        );
       }
 
-      // Owner replied with TEXT
-      if (msg.text) {
-        await sendTelegramMessage(
-          pending.businessConnectionId,
-          pending.customerChatId,
-          msg.text
-        );
-        addToHistory(pending.customerChatId, "assistant", msg.text);
-        pendingQuestions.delete(replyTo);
-        await sendToOwner(`✅ Sent to ${pending.customerName}`);
-        console.log(`✅ Owner text forwarded to ${pending.customerName}`);
-        return;
-      }
+      // Unblock customer
+      state.blocked = false;
+      saveState();
+      pendingQuestions.delete(replyTo);
+      await sendToOwner(`✅ Sent to ${pending.customerName}`);
+      return;
     }
   } catch (error) {
     console.error("❌ Error handling update:", error.message);
@@ -494,10 +590,9 @@ async function handleUpdate(update) {
 }
 
 // ======================================================
-// HTTP SERVER (handles both webhook + health check)
+// HTTP SERVER (webhook + health check)
 // ======================================================
 http.createServer(async (req, res) => {
-  // Webhook endpoint — Telegram sends updates here
   if (req.method === "POST" && req.url === WEBHOOK_PATH) {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
@@ -513,8 +608,6 @@ http.createServer(async (req, res) => {
     });
     return;
   }
-
-  // Health check / keep-alive
   res.writeHead(200, { "Content-Type": "text/plain" });
   res.end("Digaf support bot is alive\n");
 }).listen(process.env.PORT || 3000, () => {
@@ -522,12 +615,11 @@ http.createServer(async (req, res) => {
 });
 
 // ======================================================
-// SET WEBHOOK ON STARTUP
+// SET WEBHOOK
 // ======================================================
 async function setWebhook() {
-  const webhookUrl = `${RENDER_URL}${WEBHOOK_PATH}`;
-  const apiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=${encodeURIComponent(webhookUrl)}&allowed_updates=${encodeURIComponent(JSON.stringify(["business_message", "message"]))}`;
-
+  const url = `${RENDER_URL}${WEBHOOK_PATH}`;
+  const apiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=${encodeURIComponent(url)}&allowed_updates=${encodeURIComponent(JSON.stringify(["business_message", "message"]))}`;
   try {
     const res = await fetch(apiUrl);
     const data = await res.json();
@@ -539,5 +631,4 @@ async function setWebhook() {
 
 setWebhook().then(() => {
   console.log("🏦 Digaf customer-service AI is running (webhook mode)...");
-  console.log("📡 Waiting for messages...");
 });

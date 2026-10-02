@@ -3,3 +3,4 @@ node_modules/
 memory.json
 *.log
 .DS_Store
+state.json

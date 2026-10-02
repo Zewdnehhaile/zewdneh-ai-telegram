@@ -1,13 +1,10 @@
 {
   "payday_loan": {
     "name": "Payday Loan",
+    "type": "public",
     "keywords": [
-      "payday loan",
-      "pay day loan",
-      "payday",
-      "የአስቸኳይ ብድር",
-      "የአስቸኳይ ደመወዝ ብድር",
-      "አስቸኳይ ብድር"
+      "payday loan", "pay day loan", "payday",
+      "የአስቸኳይ ብድር", "የአስቸኳይ ደመወዝ ብድር", "አስቸኳይ ብድር"
     ],
     "file": "payday-loan.pdf",
     "caption": "Digaf Payday Loan — Contract"
@@ -15,13 +12,10 @@
 
   "business_loan": {
     "name": "Business Loan",
+    "type": "public",
     "keywords": [
-      "business loan",
-      "business",
-      "sme",
-      "sme loan",
-      "የንግድ ብድር",
-      "ንግድ ብድር"
+      "business loan", "business", "sme", "sme loan",
+      "የንግድ ብድር", "ንግድ ብድር"
     ],
     "file": "business-loan.pdf",
     "caption": "Digaf Business Loan — Contract"
@@ -29,11 +23,10 @@
 
   "salary_advance": {
     "name": "Salary Advance",
+    "type": "public",
     "keywords": [
-      "salary advance",
-      "advance",
-      "የደመወዝ ቅድመ ክፍያ",
-      "ቅድመ ክፍያ"
+      "salary advance", "advance",
+      "የደመወዝ ቅድመ ክፍያ", "ቅድመ ክፍያ"
     ],
     "file": "salary-advance.pdf",
     "caption": "Digaf Salary Advance — Contract"
@@ -41,12 +34,10 @@
 
   "guarantee_form": {
     "name": "Guarantee Form (ዋስ)",
+    "type": "public",
     "keywords": [
-      "guarantee form",
-      "guarantee",
-      "wase",
-      "ዋስ",
-      "የዋስ ፎርም"
+      "guarantee form", "guarantee", "wase",
+      "ዋስ", "የዋስ ፎርም"
     ],
     "file": "guarantee-form.pdf",
     "caption": "Digaf Guarantee Form (ዋስ)"
@@ -54,27 +45,22 @@
 
   "payday_loan_oromifa": {
     "name": "Payday Loan (Oromifa)",
+    "type": "public",
     "keywords": [
-      "payday oromifa",
-      "payday loan oromifa",
-      "oromifa payday",
-      "ኦሮሚፋ ብድር",
-      "oromifa"
+      "payday oromifa", "payday loan oromifa", "oromifa payday",
+      "ኦሮሚፋ ብድር", "oromifa"
     ],
     "file": "payday-loan-oromifa.pdf",
     "caption": "Digaf Payday Loan (Oromifa)"
-  }
-  ,
+  },
 
   "withdraw_form": {
-    "name": "Saving Withdraw Form",
+    "name": "Savings Withdraw Form",
+    "type": "contract",
     "keywords": [
-      "withdraw form",
-      "withdrawal form",
-      "saving withdraw",
-      "savings withdrawal",
-      "የቁጠባ ማውጫ ፎርም",
-      "ወጪ ፎርም"
+      "withdraw form", "withdrawal form", "saving withdraw",
+      "savings withdrawal", "refund",
+      "የቁጠባ ማውጫ ፎርም", "ወጪ ፎርም", "ቅድመ ክፍያ ማውጣት"
     ],
     "file": "withdraw-form.pdf",
     "caption": "Digaf Savings Withdraw Form"

@@ -1,6 +1,34 @@
 {
   "note": "Approved Digaf customer-service scripts. Do NOT change the meaning. Preserve Amharic wording exactly as given.",
 
+  "language_menu": {
+    "reply": "ሰላም! እንኳን ወደ ድጋፍ ማይክሮ ክሬዲት አቅራቢ አ.ማ በደህና መጡ።\nWelcome to Digaf Micro Credit Provider S.C.\nBaga gara Digaf Micro Credit Provider S.C. dhuftan.\n\nእባክዎ የሚፈልጉትን ቋንቋ ይምረጡ / Please choose your language / Maaloo afaan filadhaa:\n\n1️⃣ አማርኛ\n2️⃣ English\n3️⃣ Afaan Oromoo\n\n↩️ ቁጥሩን ይላኩ / Reply with the number / Lakkoofsa ergaa."
+  },
+
+  "ask_name_phone": {
+    "reply_am": "እባክዎ ሙሉ ስምዎን እና የተመዘገበ ስልክ ቁጥርዎን (09... ብቻ) ይላኩልን።",
+    "reply_en": "Please send us your full name and registered phone number (starting with 09... only).",
+    "reply_om": "Maaloo maqaa guutuu fi lakkoofsa bilbilaa galmaa'e (09... qofa) nuuf ergaa."
+  },
+
+  "invalid_phone": {
+    "reply_am": "የላኩት ስልክ ቁጥር ትክክል አይደለም። እባክዎ በ09 የሚጀምር የ10 አሃዝ ቁጥር ይላኩ።",
+    "reply_en": "The phone number you sent is invalid. Please send a 10-digit number starting with 09.",
+    "reply_om": "Lakkoofsi bilbilaa ergitan sirrii miti. Maaloo lakkoofsa dijitii 10 kan 09'n jalqabu ergaa."
+  },
+
+  "resend_file": {
+    "reply_am": "አመሰግናለን። አሁን ፋይሉን እንደገና ይላኩልን።",
+    "reply_en": "Thank you. Now please resend the file.",
+    "reply_om": "Galatoomi. Amma faayilii san irra deebi'ii nuuf ergaa."
+  },
+
+  "will_respond_soon": {
+    "reply_am": "እባክዎ ትንሽ ይጠብቁ፣ በቅርቡ እንመልስልዎታለን።",
+    "reply_en": "Please wait a moment, we will respond to you soon.",
+    "reply_om": "Maaloo xiqqoo eegaa, dhiyootti isiniif deebisna."
+  },
+
   "greeting": {
     "keywords": ["hi", "hello", "hey", "ሰላም", "ሰላም ጤና ይስጥልኝ", "ጤና ይስጥልኝ"],
     "reply": "ሰላም ጤና ይስጥልኝ\nድጋፍ ማይክሮ ፋይናንስ የጥሪ ማእከል ነው   እባክዋን ምን ልርዳዎ ?"
@@ -13,64 +41,38 @@
 
   "emergency_salary_loan_requirements": {
     "keywords": [
-      "emergency loan requirements",
-      "salary loan requirements",
-      "payday loan requirements",
-      "የአስቸኳይ ደመወዝ ብድር መስፈርት",
-      "የአስቸኳይ ብድር መስፈርት",
-      "የደመወዝ ብድር መስፈርት"
+      "emergency loan requirements", "salary loan requirements", "payday loan requirements",
+      "የአስቸኳይ ደመወዝ ብድር መስፈርት", "የአስቸኳይ ብድር መስፈርት", "የደመወዝ ብድር መስፈርት"
     ],
     "reply": "የአስቸኳይ ደመወዝ ብድር\n1,National ID) ይላኩለን\n2,የስራ መታወቂያ (Employment ID)\n3,የቋሚነት የስራ ደብዳቤ (Permanent Employment Letter)\nእናመሰግናለን።"
   },
 
   "business_loan_requirements": {
     "keywords": [
-      "business loan requirements",
-      "sme requirements",
-      "የንግድ ብድር መስፈርት",
-      "የንግድ ብድር ምን ያስፈልጋል",
-      "ንግድ ብድር መስፈርት"
+      "business loan requirements", "sme requirements",
+      "የንግድ ብድር መስፈርት", "የንግድ ብድር ምን ያስፈልጋል", "ንግድ ብድር መስፈርት"
     ],
     "reply": "የንግድ ብድር ለማበደር\n1. የግል፦\n የታደሰ መታወቂያ/ብሄራዊ ወይም የቀበሌ/\n የዘጠና ቀን የባንክ ስቴትመንት\n የታደሰ ንግድ ፍቃድ፣ ንግድ ምዝገባና ቲን ነምበር"
   },
 
   "loan_60_90_days_requirements": {
     "keywords": [
-      "60 90 days loan",
-      "60-90 days",
-      "60 90 requirements",
-      "የ60–90 ቀን ብድር መስፈርቶች",
-      "የ60 90 ቀን ብድር"
+      "60 90 days loan", "60-90 days", "60 90 requirements",
+      "የ60–90 ቀን ብድር መስፈርቶች", "የ60 90 ቀን ብድር"
     ],
     "reply": "60–90 Days Loan Requirements\n\n1. National ID of both the Borrower (ተበዳሪ) and the Guarantor (ዋስ)\n2. Employment ID of both the Borrower and the Guarantor\n3. Bank Statement of the borrower for the last 3 months\n\nOnly salary payment pages\n3 pages, stamped by the bank\n\n—————\n\nየ60–90 ቀን ብድር መስፈርቶች\n\n1. የተበዳሪ እና የዋስ መታወቂያ (National ID)\n2. የተበዳሪ እና የዋስ የስራ መታወቂያ (Employment ID)\n3. የ3 ወር የተበዳሪ የባንክ ሂሳብ መግለጫ (Bank Statement)\n\nየደመወዝ መግቢያ ቀን ብቻ\n3 ገፆች\nየባንክ ማህተም ያለበት"
   },
 
   "service_area": {
     "keywords": [
-      "service area",
-      "far away",
-      "distance",
-      "branch location",
-      "የአገልግሎት አካባቢ",
-      "ርቀት",
-      "አገልግሎት ማቅረብ"
+      "service area", "far away", "distance", "branch location",
+      "የአገልግሎት አካባቢ", "ርቀት", "አገልግሎት ማቅረብ"
     ],
     "reply": "ተቋሙ ከእኛ በርቀት ከፍ ካለ፣ በአሁኑ ሰአት አገልግሎት ማቅረብ አይቻልም።\nነገር ግን፣ አገልግሎት በተስፋፋ መስመር ሲጀመር በቀጥታ እናሳውቃለን።\nእናመሰግናለን።"
   },
 
   "non_bank_institutions": {
-    "keywords": [
-      "police",
-      "non bank",
-      "non-bank institution",
-      "ፖሊስ",
-      "ባንክ ያልሆነ ተቋም"
-    ],
+    "keywords": ["police", "non bank", "non-bank institution", "ፖሊስ", "ባንክ ያልሆነ ተቋም"],
     "reply": "ለጊዜው እየሰጠን ያለው አገልግሎት ለባንክ ተቋማት ብቻ ነው።"
-  },
-
-  "escalation_default": {
-    "keywords": [],
-    "reply": "እባክዎ ትንሽ ይጠብቁ፣ ጥያቄዎን ለሰው ሰራተኛ እናስተላልፋለን።\nPlease wait a moment, we are forwarding your question to a Digaf staff member."
   }
 }
