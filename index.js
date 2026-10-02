@@ -1,16 +1,9 @@
 require("dotenv").config();
+const http = require("http");
 const OpenAI = require("openai");
 const fs = require("fs");
 const path = require("path");
-const http = require("http");
 
-// Tiny dummy web server so Render detects an open port
-http.createServer((req, res) => {
-  res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("Zewdneh bot is alive\n");
-}).listen(process.env.PORT || 3000, () => {
-  console.log("🌐 Dummy web server listening on port", process.env.PORT || 3000);
-});
 const openai = new OpenAI({
   apiKey: process.env.GEMINI_API_KEY,
   baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
@@ -19,13 +12,19 @@ const openai = new OpenAI({
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID;
 
+// ---------- Dummy web server (Render free tier needs a port) ----------
+http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Zewdneh bot is alive\n");
+}).listen(process.env.PORT || 3000, () => {
+  console.log("🌐 Dummy web server listening on port", process.env.PORT || 3000);
+});
+
 // ---------- Memory storage ----------
 const MEMORY_FILE = path.join(__dirname, "memory.json");
-const MAX_HISTORY = 100; // last 100 messages per friend
+const MAX_HISTORY = 100;
 
-let memory = {}; // { [friendChatId]: [ {role, content}, ... ] }
-
-// Load memory from disk
+let memory = {};
 if (fs.existsSync(MEMORY_FILE)) {
   try {
     memory = JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
@@ -36,7 +35,6 @@ if (fs.existsSync(MEMORY_FILE)) {
   }
 }
 
-// Save memory to disk
 function saveMemory() {
   try {
     fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2));
@@ -90,14 +88,34 @@ async function sendTelegramMessage(businessConnectionId, chatId, text) {
   return result;
 }
 
+// ---------- Send a PHOTO to a chat ----------
+async function sendTelegramPhoto(businessConnectionId, chatId, photoUrl, caption = "") {
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
+
+  const body = { chat_id: chatId, photo: photoUrl };
+  if (caption) body.caption = caption;
+  if (businessConnectionId) body.business_connection_id = businessConnectionId;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const result = await response.json();
+  if (!result.ok) {
+    throw new Error(`Telegram sendPhoto error: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function sendToOwner(text) {
   return sendTelegramMessage(null, OWNER_CHAT_ID, text);
 }
 
-// ---------- AI ----------
+// ---------- AI (text reply) ----------
 
 async function askAI(chatId, message) {
-  // Save the friend's new message to memory
   addToHistory(chatId, "user", message);
 
   const history = memory[String(chatId)] || [];
@@ -109,13 +127,16 @@ async function askAI(chatId, message) {
         role: "system",
         content:
           "You ARE Zewdneh. You are replying to Zewdneh's friends on Telegram as Zewdneh himself. " +
-          "Never say you are an AI, a bot, a program, or an assistant. " +
-          "Never break character. " +
-          "Reply naturally, casually, and briefly, like a real friend texting. " +
-          "You remember the conversation history with each friend. " +
-          "Answer in the same language the friend uses. " +
-          "If you are not sure how Zewdneh would reply, or the message is sensitive, personal, about plans, money, love, or something only Zewdneh would know, " +
-          "then reply with exactly this format and nothing else: " +
+          "Never say you are an AI, bot, program, or assistant. Never break character. " +
+          "Reply naturally, casually, and briefly — like a real friend texting on Telegram. " +
+          "Match the language the friend uses (Amharic, English, or mixed). " +
+          "Use casual, friendly tone. It's okay to use emojis sometimes. " +
+          "DEFAULT BEHAVIOR: just reply normally as Zewdneh would. Do NOT ask Zewdneh for permission for normal chat. " +
+          "ONLY use the ASK_ZEWDNEH format when the message is about: " +
+          "money, sending/receiving payments, meeting up in person, love/relationship, " +
+          "secrets, family issues, or something ONLY the real Zewdneh would know. " +
+          "Greetings, small talk, jokes, 'how are you', 'what's up', and casual chat MUST be answered directly without asking. " +
+          "When you DO need to ask, reply with exactly: " +
           "[ASK_ZEWDNEH]: <the friend's message> — what should I reply?",
       },
       ...history,
@@ -123,10 +144,7 @@ async function askAI(chatId, message) {
   });
 
   const answer = response.choices[0].message.content;
-
-  // Save AI reply to memory too (so it remembers what it said)
   addToHistory(chatId, "assistant", answer);
-
   return answer;
 }
 
@@ -168,25 +186,19 @@ async function main() {
 
           if (answer.trim().startsWith("[ASK_ZEWDNEH]")) {
             const friendName =
-              message.from?.first_name ||
-              message.from?.username ||
-              "Friend";
+              message.from?.first_name || message.from?.username || "Friend";
 
             const sent = await sendToOwner(
               `❓ ${friendName} asked:\n"${incomingText}"\n\n✍️ Reply to THIS message with what I should send.`
             );
 
-            const ownerMsgId = sent.result.message_id;
-
-            pendingQuestions.set(ownerMsgId, {
+            pendingQuestions.set(sent.result.message_id, {
               businessConnectionId,
               friendChatId: chatId,
               friendName,
             });
 
-            console.log(
-              `📨 Forwarded question to owner (msg ${ownerMsgId})`
-            );
+            console.log(`📨 Forwarded question to owner (msg ${sent.result.message_id})`);
             continue;
           }
 
@@ -203,6 +215,34 @@ async function main() {
 
           if (String(fromId) !== String(OWNER_CHAT_ID)) continue;
 
+          // ----- 2a) Owner sends a PHOTO to forward to a friend -----
+          if (
+            replyTo &&
+            pendingQuestions.has(replyTo) &&
+            msg.photo &&
+            msg.photo.length > 0
+          ) {
+            const pending = pendingQuestions.get(replyTo);
+            // get largest photo
+            const fileId = msg.photo[msg.photo.length - 1].file_id;
+            const caption = msg.caption || "";
+
+            await sendTelegramPhoto(
+              pending.businessConnectionId,
+              pending.friendChatId,
+              fileId,
+              caption
+            );
+
+            addToHistory(pending.friendChatId, "assistant", `[photo] ${caption}`);
+            pendingQuestions.delete(replyTo);
+
+            await sendToOwner(`✅ Photo sent to ${pending.friendName}`);
+            console.log(`✅ Owner photo forwarded to ${pending.friendName}`);
+            continue;
+          }
+
+          // ----- 2b) Owner sends TEXT reply -----
           if (!replyTo || !pendingQuestions.has(replyTo)) {
             console.log("ℹ️ Owner message ignored (no pending question)");
             continue;
@@ -217,7 +257,6 @@ async function main() {
             msg.text
           );
 
-          // Save your manual reply into that friend's memory too
           addToHistory(pending.friendChatId, "assistant", msg.text);
 
           await sendToOwner(`✅ Sent to ${pending.friendName}`);
