@@ -64,8 +64,6 @@ async function fetchBusinessConnection(businessConnectionId) {
     if (data.ok) {
       businessConnectionCache = data.result;
       console.log(`🔗 Business owner user id: ${data.result.user?.id}, name: ${data.result.user?.first_name}`);
-    } else {
-      console.log("⚠️ getBusinessConnection failed:", JSON.stringify(data));
     }
   } catch (e) {
     console.log("⚠️ Could not fetch business connection:", e.message);
@@ -141,6 +139,17 @@ function getLastMessages(chatId, count = 5) {
   const key = String(chatId);
   const arr = memory[key] || [];
   return arr.slice(-count);
+}
+
+// ======================================================
+// LANGUAGE HELPERS
+// ======================================================
+function tr(lang, key) {
+  // key like "ask_name_phone", "invalid_phone", "resend_file", "will_respond_soon"
+  const obj = responses[key];
+  if (!obj) return "";
+  const map = { am: "reply_am", en: "reply_en", om: "reply_om" };
+  return obj[map[lang] || "reply_am"] || obj.reply_am || "";
 }
 
 // ======================================================
@@ -231,41 +240,30 @@ function buildSystemPrompt(lang) {
 
   const langName = { am: "Amharic", en: "English", om: "Afaan Oromoo" }[lang] || "Amharic";
 
-  return `You are the official customer-service AI assistant for DIGAF MICRO CREDIT PROVIDER S.C. (ድጋፍ ማይክሮ ክሬዲት አቅራቢ አ.ማ).
+  return `You are the official customer-service AI assistant for DIGAF MICRO CREDIT PROVIDER S.C.
 
 CUSTOMER'S CHOSEN LANGUAGE: ${langName}
-→ ALWAYS reply in ${langName}, even if the customer writes in another language. Only switch if the customer asks to switch.
+→ ALWAYS reply in ${langName}, even if the customer writes in another language.
 
-IDENTITY RULES:
-- You are polite, professional, helpful — like a trained Digaf employee.
-- If a customer asks if you are human, say honestly that you are the Digaf customer-service AI assistant.
-- Keep replies short and clear unless detailed info is required.
-- NEVER invent: loan amounts, interest rates, approval decisions, balances, service areas, processing times, bank account numbers, or policies.
-- NEVER promise a loan approval.
-- NEVER say "forwarding to staff" or "forwarding to a human" or "ለሰው ሰራተኛ እናስተላልፋለን".
-- If escalation is needed, say "Please wait a moment, we will respond to you soon." (translated to ${langName})
+RULES:
+- Be polite, professional, helpful — like a trained Digaf employee.
+- Keep replies short and clear.
+- NEVER invent loan amounts, interest rates, approvals, balances, policies, or bank accounts.
+- NEVER promise loan approval.
+- NEVER say "forwarding to staff" or "ለሰው ሰራተኛ እናስተላልፋለን".
+- If unsure → say "Please wait a moment, we will respond to you soon." (in ${langName})
 
-OUTPUT FORMAT — reply ONLY with valid JSON:
-
+OUTPUT — valid JSON only:
 {
   "intent": "GREETING",
   "document_type": null,
-  "reply": "text (in ${langName})",
+  "reply": "text in ${langName}",
   "escalation_reason": null
 }
 
-Allowed intents:
-GREETING, LOAN_TYPE_SELECTION, PAYDAY_LOAN, SALARY_LOAN, SALARY_ADVANCE, BUSINESS_LOAN,
-LOAN_REQUIREMENTS, LOAN_60_90_DAYS, PAYMENT_INFORMATION, BANK_ACCOUNT_REQUEST,
-TELEBIRR_PAYMENT, TELEBIRR_THIRD_PARTY_ACCOUNT, SERVICE_AREA, NON_BANK_INSTITUTION,
-DOCUMENT_REQUEST, GENERAL_INFORMATION, COMPLAINT, PAYMENT_DISPUTE,
-ACCOUNT_SPECIFIC_REQUEST, LOAN_APPROVAL_REQUEST, UNKNOWN, HUMAN_ESCALATION
+Allowed intents: GREETING, LOAN_TYPE_SELECTION, PAYDAY_LOAN, SALARY_LOAN, SALARY_ADVANCE, BUSINESS_LOAN, LOAN_REQUIREMENTS, LOAN_60_90_DAYS, PAYMENT_INFORMATION, BANK_ACCOUNT_REQUEST, TELEBIRR_PAYMENT, TELEBIRR_THIRD_PARTY_ACCOUNT, SERVICE_AREA, NON_BANK_INSTITUTION, DOCUMENT_REQUEST, GENERAL_INFORMATION, COMPLAINT, PAYMENT_DISPUTE, ACCOUNT_SPECIFIC_REQUEST, LOAN_APPROVAL_REQUEST, UNKNOWN, HUMAN_ESCALATION
 
 For documents: "intent": "DOCUMENT_REQUEST", "document_type": "<${docKeys.join(", ")}>"
-
-==================================================
-APPROVED KNOWLEDGE
-==================================================
 
 --- RESPONSES ---
 ${JSON.stringify(responses, null, 2)}
@@ -348,12 +346,10 @@ async function handleUpdate(update) {
       const customerChatId = message.chat.id;
       const customerName = message.from?.first_name || message.from?.username || "Customer";
 
-      // ===== OWNER's OWN MESSAGE =====
+      // ===== OWNER MESSAGE =====
       if (isFromOwner) {
-        if (message.text) {
-          addToHistory(customerChatId, "assistant", message.text);
-        }
-        console.log(`👤 Owner message stored as context: ${message.text || "[file]"}`);
+        if (message.text) addToHistory(customerChatId, "assistant", message.text);
+        console.log(`👤 Owner message stored`);
         return;
       }
 
@@ -377,17 +373,17 @@ async function handleUpdate(update) {
       // ---------- LANGUAGE MENU ----------
       if (state.awaiting === "language") {
         const text = (message.text || "").trim();
-        if (text === "1" || /amharic|አማርኛ/i.test(text)) {
+        if (text === "1" || /^amharic$|^አማርኛ$/i.test(text)) {
           state.lang = "am"; state.awaiting = null; saveState();
           await sendTelegramMessage(businessConnectionId, customerChatId, "እንኳን በደህና መጡ። እንዴት ልርዳዎት?");
           return;
         }
-        if (text === "2" || /english|eng/i.test(text)) {
+        if (text === "2" || /^english$|^eng$/i.test(text)) {
           state.lang = "en"; state.awaiting = null; saveState();
           await sendTelegramMessage(businessConnectionId, customerChatId, "Welcome. How can I help you?");
           return;
         }
-        if (text === "3" || /orom/i.test(text)) {
+        if (text === "3" || /^orom|oromifa$/i.test(text)) {
           state.lang = "om"; state.awaiting = null; saveState();
           await sendTelegramMessage(businessConnectionId, customerChatId, "Baga nagaan dhuftan. Akkamittin isin gargaaruu danda'a?");
           return;
@@ -396,37 +392,48 @@ async function handleUpdate(update) {
         return;
       }
 
-      // ---------- NAME + PHONE ----------
+      // ---------- NAME + PHONE (any order) ----------
       if (state.awaiting === "name_phone") {
         const text = (message.text || "").trim();
         const phoneMatch = text.match(/(09\d{8}|\+2519\d{8})/);
         const phone = phoneMatch ? phoneMatch[0] : null;
         const namePart = text.replace(phone || "", "").trim();
 
-        if (!phone || !PHONE_REGEX.test(phone)) {
-          await sendTelegramMessage(
-            businessConnectionId, customerChatId,
-            responses.invalid_phone[`reply_${state.lang || "am"}`] || responses.invalid_phone.reply_am
-          );
-          return;
-        }
-        if (!namePart || namePart.length < 2) {
-          await sendTelegramMessage(
-            businessConnectionId, customerChatId,
-            responses.ask_name_phone[`reply_${state.lang || "am"}`] || responses.ask_name_phone.reply_am
-          );
+        // Save whatever we got
+        if (phone && PHONE_REGEX.test(phone)) {
+          state.tempPhone = phone;
+        } else if (phone) {
+          // Looks like a phone but wrong format
+          await sendTelegramMessage(businessConnectionId, customerChatId, tr(state.lang, "invalid_phone"));
           return;
         }
 
-        state.tempName = namePart;
-        state.tempPhone = phone;
-        state.awaiting = "resend_file";
+        if (namePart && namePart.length >= 2) {
+          state.tempName = namePart;
+        }
+
         saveState();
 
-        await sendTelegramMessage(
-          businessConnectionId, customerChatId,
-          responses.resend_file[`reply_${state.lang || "am"}`] || responses.resend_file.reply_am
-        );
+        // Check if we have BOTH
+        if (state.tempName && state.tempPhone) {
+          state.awaiting = "resend_file";
+          saveState();
+          await sendTelegramMessage(businessConnectionId, customerChatId, tr(state.lang, "resend_file"));
+          return;
+        }
+
+        // Missing one — ask for what's missing
+        if (!state.tempPhone && !state.tempName) {
+          await sendTelegramMessage(businessConnectionId, customerChatId, tr(state.lang, "ask_name_phone"));
+        } else if (!state.tempPhone) {
+          // Have name, need phone
+          const msgPhone = { am: "እባክዎ የስልክ ቁጥርዎን (09... ብቻ) ይላኩልን።", en: "Please send your phone number (starting with 09...).", om: "Maaloo lakkoofsa bilbilaa (09... qofa) nuuf ergaa." };
+          await sendTelegramMessage(businessConnectionId, customerChatId, msgPhone[state.lang || "am"]);
+        } else {
+          // Have phone, need name
+          const msgName = { am: "እባክዎ ሙሉ ስምዎን ይላኩልን።", en: "Please send your full name.", om: "Maaloo maqaa guutuu nuuf ergaa." };
+          await sendTelegramMessage(businessConnectionId, customerChatId, msgName[state.lang || "am"]);
+        }
         return;
       }
 
@@ -442,7 +449,7 @@ async function handleUpdate(update) {
             .join("\n");
 
           const ownerMsg = await sendToOwner(
-            `📥 VERIFIED CUSTOMER FILE\n\nName: ${state.tempName}\nPhone: ${state.tempPhone}\nChat ID: ${customerChatId}\n${fileInfo}\n\n📜 Last messages:\n${last5}\n\n✍️ Reply to THIS message with what to send to the customer.`
+            `📥 VERIFIED CUSTOMER FILE\n\nName: ${state.tempName}\nPhone: ${state.tempPhone}\nChat ID: ${customerChatId}\n${fileInfo}\n\n📜 Last messages:\n${last5}\n\n✍️ Reply to THIS message.`
           );
 
           if (message.document) {
@@ -462,25 +469,19 @@ async function handleUpdate(update) {
           state.awaiting = null;
           saveState();
 
-          await sendTelegramMessage(
-            businessConnectionId, customerChatId,
-            responses.will_respond_soon[`reply_${state.lang || "am"}`] || responses.will_respond_soon.reply_am
-          );
+          await sendTelegramMessage(businessConnectionId, customerChatId, tr(state.lang, "will_respond_soon"));
           return;
         }
-
-        await sendTelegramMessage(
-          businessConnectionId, customerChatId,
-          responses.resend_file[`reply_${state.lang || "am"}`] || responses.resend_file.reply_am
-        );
+        await sendTelegramMessage(businessConnectionId, customerChatId, tr(state.lang, "resend_file"));
         return;
       }
 
       // ---------- FIRST FILE → ASK IDENTITY ----------
       if (message.document || (message.photo && message.photo.length > 0)) {
-        const ask = responses.ask_name_phone[`reply_${state.lang || "am"}`] || responses.ask_name_phone.reply_am;
-        await sendTelegramMessage(businessConnectionId, customerChatId, ask);
+        await sendTelegramMessage(businessConnectionId, customerChatId, tr(state.lang, "ask_name_phone"));
         state.awaiting = "name_phone";
+        state.tempName = null;
+        state.tempPhone = null;
         saveState();
         return;
       }
@@ -505,12 +506,10 @@ async function handleUpdate(update) {
           if (entry.type === "contract") {
             await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
             const ownerMsg = await sendToOwner(
-              `📄 CONTRACT REQUEST\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\nDocument: ${entry.name}\n\n✍️ Reply to THIS message to send the file (or a message) to the customer.`
+              `📄 CONTRACT REQUEST\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\nDocument: ${entry.name}\n\n✍️ Reply to THIS message.`
             );
             pendingQuestions.set(ownerMsg.result.message_id, {
-              businessConnectionId,
-              customerChatId,
-              customerName,
+              businessConnectionId, customerChatId, customerName,
               requestedDocument: ai.document_type,
             });
             state.blocked = true;
@@ -522,20 +521,18 @@ async function handleUpdate(update) {
           const isEstablished = historyLen >= 20;
 
           if (!fs.existsSync(filePath)) {
-            await sendTelegramMessage(businessConnectionId, customerChatId, responses.will_respond_soon[`reply_${state.lang || "am"}`]);
+            await sendTelegramMessage(businessConnectionId, customerChatId, tr(state.lang, "will_respond_soon"));
             return;
           }
 
           if (!isEstablished) {
             if (ai.reply) await sendTelegramMessage(businessConnectionId, customerChatId, ai.reply);
-            await sendTelegramMessage(businessConnectionId, customerChatId, responses.will_respond_soon[`reply_${state.lang || "am"}`]);
+            await sendTelegramMessage(businessConnectionId, customerChatId, tr(state.lang, "will_respond_soon"));
             const ownerMsg = await sendToOwner(
               `📄 FILE REQUEST (new customer)\n\nCustomer: ${customerName}\nChat ID: ${customerChatId}\nRequested: ${entry.name}\nHistory: ${historyLen} msgs\n\n✍️ Reply to THIS message.`
             );
             pendingQuestions.set(ownerMsg.result.message_id, {
-              businessConnectionId,
-              customerChatId,
-              customerName,
+              businessConnectionId, customerChatId, customerName,
               requestedDocument: ai.document_type,
             });
             state.blocked = true;
@@ -569,7 +566,7 @@ async function handleUpdate(update) {
       }
     }
 
-    // ============ OWNER REPLY (private chat) ============
+    // ============ OWNER REPLY ============
     if (update.message) {
       const msg = update.message;
       const fromId = msg.chat.id;
@@ -587,7 +584,6 @@ async function handleUpdate(update) {
         const fileId = msg.photo[msg.photo.length - 1].file_id;
         await sendTelegramPhoto(pending.businessConnectionId, pending.customerChatId, fileId, msg.caption || "");
       } else if (msg.text) {
-        // If a document was requested, auto-send it now
         if (pending.requestedDocument) {
           const entry = documentsRegistry[pending.requestedDocument];
           if (entry) {
@@ -599,9 +595,7 @@ async function handleUpdate(update) {
                 filePath,
                 entry.caption || entry.name
               );
-              console.log(`📄 Auto-sent requested document: ${entry.file}`);
-            } else {
-              console.log(`❌ Requested file missing: ${entry.file}`);
+              console.log(`📄 Auto-sent: ${entry.file}`);
             }
           }
         }
